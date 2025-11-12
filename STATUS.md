@@ -18,9 +18,9 @@
 | Infrastructure | =4 | Not started - AWS setup pending |
 | CI/CD Pipeline | =4 | Not started |
 | Test Coverage | =4 | No code yet |
-| Known Bugs | =â | None (no code yet) |
+| Known Bugs | =ï¿½ | None (no code yet) |
 
-**Status Guide:** =â Good | =á Attention | =4 Critical | =5 In Progress
+**Status Guide:** =ï¿½ Good | =ï¿½ Attention | =4 Critical | =5 In Progress
 
 ---
 
@@ -35,19 +35,21 @@
 - âœ… Persistent memory architecture researched (DynamoDB vector store for RAG)
 - âœ… Personalization requirements defined (colleague â†’ partner â†’ friend progression)
 - âœ… Trust-building visualization strategy documented
+- âœ… Complete base documentation (ARCHITECTURE.md, CONTRIBUTING.md, DEVELOPMENT.md, CHANGELOG.md)
+- âœ… Generate BLUEPRINT.yaml using `blueprint-planner` subagent
+- âœ… Create GitHub issues from blueprint (133 issues: 10 epics, 34 features, 89 tasks)
+- âœ… **Star Atlas API Research Spike Complete** (Issue #141)
+  - ADR-001: Hybrid data sourcing strategy (Galaxy API + Solana RPC)
+  - Data inventory: 10+ data types cataloged with TypeScript interfaces
+  - Cost analysis: 91% reduction ($45/month â†’ $4/month)
+  - Implementation plan: 4 phases over 2 weeks
 
 **In Progress:**
-- =5 ARCHITECTURE.md creation (pending)
-- =5 CONTRIBUTING.md creation (pending)
-- =5 DEVELOPMENT.md creation (pending)
-- =5 CHANGELOG.md creation (pending)
+- =5 Star Atlas deep research (gameplay mechanics, economic systems, user workflows)
 
 **Next Up:**
-- [ ] Complete base documentation (ARCHITECTURE.md, CONTRIBUTING.md, DEVELOPMENT.md, CHANGELOG.md)
-- [ ] Generate BLUEPRINT.yaml using `blueprint-planner` subagent
-- [ ] Validate complexity with `improving-plans` skill
-- [ ] Create GitHub issues using `github-project-infrastructure` skill
-- [ ] Begin implementation (MCP server first)
+- [ ] **Recommended**: Epic #1 - Foundation & Infrastructure (AWS setup, monorepo, CI/CD)
+- [ ] Alternative: Continue Star Atlas research to inform MCP tool design
 
 ---
 
@@ -110,7 +112,7 @@ None
 3. **Set Up GitHub Infrastructure**
    - Create GitHub issues from blueprint
    - Configure project boards
-   - Set up branch protection rules (dev ’ main only)
+   - Set up branch protection rules (dev ï¿½ main only)
    - Initialize CI/CD workflows
 
 4. **Begin Implementation**
@@ -124,9 +126,9 @@ None
 ## Open Questions
 
 **Resolved during planning:**
-1. ~~Architecture pattern?~~ ’ Serverless + DynamoDB (AWS Free Tier)
-2. ~~Price monitoring strategy?~~ ’ Secondary feature (context for AI, not charting)
-3. ~~Target users?~~ ’ Multi-user SaaS
+1. ~~Architecture pattern?~~ ï¿½ Serverless + DynamoDB (AWS Free Tier)
+2. ~~Price monitoring strategy?~~ ï¿½ Secondary feature (context for AI, not charting)
+3. ~~Target users?~~ ï¿½ Multi-user SaaS
 
 **Still pending:**
 1. **Voice UX**: Push-to-talk vs always-listening? (Recommend PTT for MVP - simpler, lower cost)
