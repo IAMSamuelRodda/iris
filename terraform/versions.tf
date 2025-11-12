@@ -9,16 +9,14 @@ terraform {
   }
 
   # Backend configuration for state management
-  # Run `terraform init` with backend config for each environment:
-  # terraform init -backend-config=environments/dev/backend.tfvars
-  backend "s3" {
-    # Configured per environment via backend.tfvars
-    # bucket         = "star-atlas-agent-terraform-state-<env>"
-    # key            = "terraform.tfstate"
-    # region         = "us-east-1"
-    # dynamodb_table = "star-atlas-agent-terraform-locks"
-    # encrypt        = true
-  }
+  # After running terraform/bootstrap/, uncomment and configure:
+  # backend "s3" {
+  #   bucket         = "star-atlas-agent-terraform-state-{region}"
+  #   key            = "terraform.tfstate"
+  #   region         = "us-east-1"
+  #   dynamodb_table = "star-atlas-agent-terraform-locks"
+  #   encrypt        = true
+  # }
 }
 
 provider "aws" {
