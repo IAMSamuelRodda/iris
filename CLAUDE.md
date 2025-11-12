@@ -1,94 +1,57 @@
 # Star Atlas Agent - CLAUDE.md
 
-> **Purpose**: Minimal critical directives for AI agents (pointers to detailed documentation)
-> **Lifecycle**: Living (keep minimal, move verbose content to CONTRIBUTING.md or DEVELOPMENT.md)
+> **Purpose**: Minimal navigation hub for AI agents (pointers to detailed documentation)
+> **Lifecycle**: Living (target: ~100 lines max)
 
 ## 📍 Critical Documents
 
 **Before starting work:**
-1. Read `STATUS.md` → Current issues, active work, what's broken
-2. Read `ARCHITECTURE.md` → System architecture, database schema, tech stack
-3. Read `CONTRIBUTING.md` → How to track progress with issues/PRs
+1. `STATUS.md` → Current issues, active work, blockers
+2. `ARCHITECTURE.md` → System design, database schema, tech stack
+3. `CONTRIBUTING.md` → Progress tracking workflow
+4. `docs/planning-session-2025-11-12.md` → Vision alignment & constraints
 
 **Before finishing work:**
-1. Update `STATUS.md` → Add investigation notes, mark issues resolved
-2. Update GitHub issues → Close completed tasks, link commits
-3. Check `DEVELOPMENT.md` → Run pre-commit checklist (lint, format, tests)
-
-**Planning artifact:** `specs/BLUEPRINT.yaml` is for generating GitHub issues when planning NEW features, NOT for reference during implementation. It becomes historical once issues are created.
+1. Update `STATUS.md` → Document investigation notes
+2. Update issues → Close completed tasks, link commits
+3. Check `DEVELOPMENT.md` → Run pre-commit checklist
 
 ---
 
 ## 🏗️ Architecture Quick Facts
 
-### Style
-- **Microservices Architecture** (Voice Service, Agent Core, MCP Server, Web App)
-- **Event-Driven** (WebSocket subscriptions for real-time blockchain monitoring)
-- **Voice-First** (Cortana-like experience with STT/TTS)
+**Style**: Event-Driven Microservices (Voice Service, Agent Core, MCP Server, Web App)
 
-### Structure Pattern
-```
-packages/
-├── mcp-staratlas-server/   # MCP tools for Star Atlas + Solana
-├── agent-core/              # Claude Agent SDK orchestrator
-├── voice-service/           # WebRTC + Whisper + ElevenLabs
-├── web-app/                 # React + Vite UI
-└── galactic-data/           # Price monitoring (existing)
+**Structure**: Serverless + DynamoDB (AWS Free Tier optimized)
 
-backend/functions/           # Firebase Functions
-.claude/
-├── agents/                  # Sub-agents (market, fleet, craft, voice)
-└── skills/                  # Star Atlas & Solana knowledge
-```
-
-See `ARCHITECTURE.md` for complete details (database schema, tech stack, ADRs, infrastructure).
+See `ARCHITECTURE.md` for complete details.
 
 ---
 
-## 🎯 Project-Specific Conventions
+## 🎯 Naming Conventions
 
-### Naming Conventions
 - Packages: `kebab-case` (e.g., `mcp-staratlas-server`)
-- Components: `PascalCase.tsx` (e.g., `PushToTalk.tsx`)
-- Hooks: `use{FeatureName}.ts` (e.g., `useVoice.ts`)
-- Services: `{feature}Service.ts` (e.g., `voiceService.ts`)
-- Tests: `{filename}.test.ts`
-
-### Voice Response Formatting
-- Text mode: Technical, concise, structured
-- Voice mode: Natural, conversational, no technical jargon
+- Components: `PascalCase.tsx` (e.g., `FleetStatus.tsx`)
+- Hooks: `use{Name}.ts` (e.g., `useVoice.ts`)
+- Services: `{name}Service.ts` (e.g., `voiceService.ts`)
 
 ---
 
 ## ⚠️ Critical Constraints
 
-1. **Voice Latency**: Voice round-trip MUST be < 500ms (use streaming STT/TTS)
-2. **Wallet Security**: NEVER auto-sign transactions - always require explicit user approval
-3. **Real-Time Data**: Use WebSocket subscriptions for Solana account changes (not polling)
-4. **Offline Context**: MCP tools MUST handle RPC failures gracefully with fallbacks
-5. **pnpm Only**: ALWAYS use `pnpm` for package management, never `npm` or `yarn`
+1. **Voice latency**: <500ms round-trip (streaming STT/TTS required)
+2. **Wallet security**: NEVER auto-sign transactions (explicit approval)
+3. **Real-time data**: WebSocket subscriptions (not polling)
+4. **AWS Free Tier**: <$10/month MVP budget
+5. **pnpm only**: Package management consistency
 
 ---
 
-## 🚀 Getting Started
+## 🔄 Workflow Quick Reference
 
-```bash
-# Install dependencies
-pnpm install
+**Branch from dev, PR to dev** (NOT main). See `CONTRIBUTING.md` for details.
 
-# Start all services in development
-pnpm dev
-```
-
-See `CONTRIBUTING.md` for complete workflow.
-
----
-
-## 🔄 GitHub Workflow
-
-**Commit-Issue Linking**: Every commit MUST reference a GitHub issue (`Closes #N`, `Relates to #N`). See `CONTRIBUTING.md` § Link Commits to Issues.
-
-**PR Merge Strategy**: Use `gh pr merge --merge` (NOT `--squash`) to preserve feature branch history. See `DEVELOPMENT.md` § Git Branching Strategy.
+**Commit linking**: Use `Closes #N` or `Relates to #N` in all commits.
 
 ---
 
@@ -98,24 +61,6 @@ See `CONTRIBUTING.md` for complete workflow.
 - **Star Atlas Docs**: https://build.staratlas.com/
 - **SAGE API**: https://www.npmjs.com/package/@staratlas/sage
 - **Claude Agent SDK**: https://docs.claude.com/en/api/agent-sdk/overview
-
----
-
-## 🧪 Testing Notes
-
-**Run tests:**
-```bash
-# All tests
-pnpm test
-
-# Specific package
-pnpm --filter mcp-staratlas-server test
-
-# E2E tests (requires test wallet)
-pnpm test:e2e
-```
-
-**Details**: See `DEVELOPMENT.md` for complete setup and troubleshooting.
 
 ---
 

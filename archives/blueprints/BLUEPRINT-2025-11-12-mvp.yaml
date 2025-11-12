@@ -1,0 +1,1904 @@
+project_overview:
+  brief: "Multi-user SaaS voice-first AI agent for Star Atlas players providing fleet monitoring, economic optimization, and personalized assistance through four-tier memory architecture (colleague → partner → friend progression)."
+  core_objectives:
+    - "Deploy MVP within AWS Free Tier budget (<$35/month) with voice latency <500ms"
+    - "Build DynamoDB-based RAG memory system enabling relationship progression and personalized insights"
+    - "Implement MCP server for Star Atlas + Solana blockchain integration with graceful offline fallbacks"
+    - "Create handshake UX onboarding (<30 sec to first interaction) with email-first progressive authentication"
+  complexity: "complex"
+  timeline_note: "AI-assisted development with 20x speedup factor applied to estimates; sporadic work pattern anticipated"
+  budget_constraint: "MVP <$35/month, optimize for AWS Free Tier (Lambda, DynamoDB, S3, CloudFront)"
+
+architecture:
+  pattern: "vertical-slice"
+  rationale: "Vertical slices enable parallel agent development with minimal cross-package coordination. Each package is self-contained with complete feature implementation (API, logic, UI). Optimizes for token efficiency during AI-assisted development."
+  components:
+    - name: "mcp-staratlas-server"
+      purpose: "MCP tools for Star Atlas game data and Solana blockchain operations"
+      boundaries: "Scope: Solana RPC calls, Star Atlas SAGE API, galactic marketplace orders, crafting recipes. Out: Business logic, user state, wallet signing."
+      dependencies: ["@solana/web3.js", "@staratlas/sage", "@staratlas/galactic-marketplace"]
+      token_estimate: "<10k"
+
+    - name: "agent-core"
+      purpose: "Claude Agent SDK orchestration with memory-augmented RAG prompts"
+      boundaries: "Scope: Conversation management, MCP tool orchestration, memory retrieval, personality progression. Out: Voice processing, UI rendering, infrastructure."
+      dependencies: ["@anthropic-ai/claude-agent-sdk", "mcp-staratlas-server", "memory-service"]
+      token_estimate: "<20k"
+
+    - name: "memory-service"
+      purpose: "Four-tier memory architecture with DynamoDB vector store for personalization"
+      boundaries: "Scope: Session memory, short-term cache, key memory extraction, vector search, compression. Out: Embedding generation (Bedrock), business logic."
+      dependencies: ["aws-sdk DynamoDB", "aws-sdk Bedrock"]
+      token_estimate: "<15k"
+
+    - name: "voice-service"
+      purpose: "WebRTC + Whisper STT + ElevenLabs TTS for <500ms voice round-trip"
+      boundaries: "Scope: WebSocket connections, audio streaming, STT/TTS API calls. Out: Agent logic, memory, UI."
+      dependencies: ["ws", "openai/whisper", "elevenlabs"]
+      token_estimate: "<10k"
+
+    - name: "web-app"
+      purpose: "React frontend with push-to-talk voice UX and trust-building visualizations"
+      boundaries: "Scope: UI components, WebRTC client, state management, visualization rendering. Out: Backend logic, voice processing."
+      dependencies: ["react", "vite", "webrtc", "tanstack-query"]
+      token_estimate: "<15k"
+
+    - name: "terraform-infrastructure"
+      purpose: "AWS serverless infrastructure (Lambda, DynamoDB, API Gateway, CloudFront)"
+      boundaries: "Scope: IaC definitions, Free Tier optimization, CI/CD config. Out: Application code."
+      dependencies: ["terraform"]
+      token_estimate: "<8k"
+
+milestones:
+  milestone_1:
+    name: "v1.0 MVP Release"
+    timeline_weeks: "12-14 (AI-adjusted)"
+    description: "Functional voice-first AI agent with basic memory, fleet monitoring, email authentication, and AWS Free Tier deployment"
+    success_criteria:
+      - "Voice round-trip latency <500ms measured on 10 test sessions"
+      - "Handshake UX onboarding completes in <30 seconds for 90% of test users"
+      - "AWS monthly cost <$35 with 50 test users"
+      - "Agent successfully remembers user preferences across sessions"
+      - "MCP tools gracefully handle Solana RPC failures with cached fallbacks"
+
+    epics:
+      epic_1:
+        name: "Foundation & Infrastructure"
+        weeks: "2-3"
+        milestone: "Terraform deploys Lambda + DynamoDB + S3 infrastructure; CI/CD pipeline active"
+
+        feature_1_1:
+          name: "AWS Infrastructure Setup"
+          complexity:
+            composite: 2.8
+            dimensions:
+              technical_complexity: 3
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 3
+              risk: 3
+              testing: 3
+          estimated_days: 4
+          deliverables:
+            - "Terraform modules for Lambda, DynamoDB, API Gateway, S3, CloudFront"
+            - "Free Tier optimization with cost alarms"
+            - "Environment variable management (dev/staging/prod)"
+
+          task_1_1_1:
+            name: "Terraform Base Configuration"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "providers.tf with AWS provider v5+"
+              - "main.tf with VPC, subnets (if needed for Fargate)"
+              - "variables.tf with environment-agnostic inputs"
+              - "outputs.tf with API endpoints, DynamoDB table names"
+            references:
+              - "docs/planning-session-2025-11-12.md § AWS Free Tier (MVP Budget)"
+
+          task_1_1_2:
+            name: "Lambda Functions Infrastructure"
+            complexity:
+              composite: 2.3
+            estimated_days: 1.5
+            deliverables:
+              - "Lambda execution roles with least-privilege IAM policies"
+              - "Lambda functions for agent-core, mcp-server, memory-service"
+              - "API Gateway REST API with CORS configuration"
+              - "CloudWatch Logs with 7-day retention"
+
+          task_1_1_3:
+            name: "DynamoDB Tables Schema"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "users table with GSI on email"
+              - "fleets table with user_id partition key"
+              - "conversations table with 48-hour TTL"
+              - "memories table for vector embeddings"
+              - "market_cache table with 5-min TTL"
+            references:
+              - "docs/memory-architecture-spike.md § DynamoDB Tables"
+
+          task_1_1_4:
+            name: "S3 + CloudFront for Frontend"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "S3 bucket for static web hosting"
+              - "CloudFront distribution with HTTPS"
+              - "Route53 DNS configuration (if custom domain)"
+
+        feature_1_2:
+          name: "Monorepo Structure & Package Management"
+          complexity:
+            composite: 2.0
+            dimensions:
+              technical_complexity: 2
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 2
+          estimated_days: 2
+          deliverables:
+            - "pnpm workspace configuration"
+            - "TypeScript base config (tsconfig.base.json)"
+            - "Shared ESLint + Prettier setup"
+            - "Package.json scripts for build/dev/test"
+
+          task_1_2_1:
+            name: "pnpm Workspace Initialization"
+            complexity:
+              composite: 1.5
+            estimated_days: 0.5
+            deliverables:
+              - "pnpm-workspace.yaml with packages/* pattern"
+              - "Root package.json with workspace commands"
+              - ".npmrc for shared config"
+
+          task_1_2_2:
+            name: "Package Scaffolding"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "packages/web-app with Vite + React + TypeScript"
+              - "packages/mcp-staratlas-server with Node.js + TypeScript"
+              - "packages/agent-core with Claude Agent SDK"
+              - "packages/voice-service with WebSocket server"
+              - "packages/memory-service with DynamoDB client"
+
+          task_1_2_3:
+            name: "Shared Tooling Configuration"
+            complexity:
+              composite: 1.5
+            estimated_days: 0.5
+            deliverables:
+              - "ESLint config extending @typescript-eslint"
+              - "Prettier config with 2-space indent, single quotes"
+              - "Husky pre-commit hooks for lint + format"
+
+        feature_1_3:
+          name: "CI/CD Pipeline Setup"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 3
+              testing: 2
+          estimated_days: 3
+          deliverables:
+            - "GitHub Actions workflows for test + build + deploy"
+            - "Branch protection rules (dev → main PR-only)"
+            - "Terraform state management in S3 backend"
+            - "Secrets management in GitHub Secrets"
+
+          task_1_3_1:
+            name: "GitHub Actions Workflows"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - ".github/workflows/test.yml (on PR)"
+              - ".github/workflows/deploy-dev.yml (on push to dev)"
+              - ".github/workflows/deploy-prod.yml (on push to main)"
+
+          task_1_3_2:
+            name: "Terraform State Backend"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "S3 bucket for Terraform state with versioning"
+              - "DynamoDB table for state locking"
+              - "backend.tf configuration"
+
+      epic_2:
+        name: "Authentication & User Management"
+        weeks: "3-4"
+        milestone: "Email magic link auth working; wallet connection optional; user profiles in DynamoDB"
+
+        feature_2_1:
+          name: "Email Magic Link Authentication"
+          complexity:
+            composite: 2.7
+            dimensions:
+              technical_complexity: 3
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 3
+              risk: 3
+              testing: 2
+          estimated_days: 4
+          deliverables:
+            - "Email magic link generation + sending (AWS SES)"
+            - "JWT token validation middleware"
+            - "User profile creation on first login"
+            - "Handshake UX onboarding flow (<30 sec)"
+
+          task_2_1_1:
+            name: "Magic Link Lambda Function"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "POST /api/auth/request-magic-link endpoint"
+              - "Generate secure token (crypto.randomBytes + HMAC)"
+              - "Store token in DynamoDB with 15-min TTL"
+              - "Send email via AWS SES with link"
+            references:
+              - "docs/product-decisions-2025-11-12.md § Authentication Decision"
+
+          task_2_1_2:
+            name: "Magic Link Verification + JWT"
+            complexity:
+              composite: 2.3
+            estimated_days: 1.5
+            deliverables:
+              - "GET /api/auth/verify endpoint"
+              - "Validate token against DynamoDB"
+              - "Generate JWT with 7-day expiry"
+              - "Create user profile if first login"
+
+          task_2_1_3:
+            name: "JWT Middleware for Protected Routes"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "Express middleware for JWT validation"
+              - "Extract user_id from JWT claims"
+              - "Return 401 for invalid/expired tokens"
+
+        feature_2_2:
+          name: "Wallet Connection (Optional Progressive Auth)"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "Phantom/Solflare wallet adapter integration"
+            - "Read-only wallet connection (no auto-signing)"
+            - "Link wallet to existing user profile"
+            - "Verify wallet ownership via signature challenge"
+
+          task_2_2_1:
+            name: "Frontend Wallet Adapter"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "React context for @solana/wallet-adapter-react"
+              - "WalletMultiButton component"
+              - "Handle wallet connection state"
+
+          task_2_2_2:
+            name: "Wallet Signature Challenge"
+            complexity:
+              composite: 2.3
+            estimated_days: 1.5
+            deliverables:
+              - "POST /api/wallet/link endpoint"
+              - "Generate nonce challenge"
+              - "Verify signature with Solana public key"
+              - "Store wallet address in user profile"
+
+        feature_2_3:
+          name: "User Profile Management"
+          complexity:
+            composite: 2.0
+            dimensions:
+              technical_complexity: 2
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 2
+          estimated_days: 2
+          deliverables:
+            - "DynamoDB users table CRUD operations"
+            - "User preferences API endpoints"
+            - "Profile data validation with Zod schemas"
+
+          task_2_3_1:
+            name: "User Profile DynamoDB Schema"
+            complexity:
+              composite: 1.5
+            estimated_days: 1
+            deliverables:
+              - "users table with user_id (PK), email (GSI)"
+              - "Profile fields: name, wallet_address, preferences"
+              - "relationship_metrics: sessions_count, trust_score"
+              - "Timestamps: created_at, updated_at, last_interaction"
+            references:
+              - "docs/memory-architecture-spike.md § Relationship Impression"
+
+          task_2_3_2:
+            name: "Profile API Endpoints"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "GET /api/profile (fetch current user)"
+              - "PATCH /api/profile (update preferences)"
+              - "Zod validation schemas for profile data"
+
+      epic_3:
+        name: "MCP Server - Star Atlas & Solana Integration"
+        weeks: "4-6"
+        milestone: "MCP tools for fleet status, market data, crafting recipes working with offline fallbacks"
+
+        feature_3_1:
+          name: "MCP Server Foundation"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 3
+              risk: 2
+              testing: 3
+          estimated_days: 4
+          deliverables:
+            - "MCP protocol implementation (stdio transport)"
+            - "Tool registration system with schemas"
+            - "Error handling with graceful degradation"
+            - "Caching layer for offline fallbacks"
+
+          task_3_1_1:
+            name: "MCP Server Bootstrap"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "MCP server class with stdio transport"
+              - "Tool registry pattern for modular tools"
+              - "Request/response type definitions"
+            references:
+              - "Claude Agent SDK MCP documentation"
+
+          task_3_1_2:
+            name: "Solana RPC Connection Management"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Connection pool to Solana mainnet RPC"
+              - "Fallback RPC endpoints (Helius, Alchemy, QuickNode)"
+              - "Retry logic with exponential backoff"
+              - "WebSocket subscription manager"
+            references:
+              - "archives/galactic-data connection patterns"
+
+          task_3_1_3:
+            name: "DynamoDB Cache Layer"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "market_cache table for price data (5-min TTL)"
+              - "fleet_cache table for blockchain state (1-min TTL)"
+              - "Cache-aside pattern implementation"
+
+        feature_3_2:
+          name: "Fleet Management Tools"
+          complexity:
+            composite: 2.8
+            dimensions:
+              technical_complexity: 3
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 3
+              risk: 2
+              testing: 3
+          estimated_days: 5
+          deliverables:
+            - "get_fleet_status tool (fuel, cargo, location, health)"
+            - "get_fuel_remaining tool with time-to-empty prediction"
+            - "get_repair_status tool with cost estimates"
+            - "list_user_fleets tool with filters"
+
+          task_3_2_1:
+            name: "Fleet Status Tool"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Fetch fleet account data from Solana"
+              - "Parse SAGE program state"
+              - "Calculate fuel %, cargo %, health %"
+              - "Return structured JSON with metadata"
+
+          task_3_2_2:
+            name: "Fuel Prediction Tool"
+            complexity:
+              composite: 2.8
+            estimated_days: 2
+            deliverables:
+              - "Calculate fuel consumption rate"
+              - "Predict time-to-empty based on current activity"
+              - "Find nearest refuel stations (starbase locations)"
+              - "Return alert if <2 hours remaining"
+
+          task_3_2_3:
+            name: "Repair Status Tool"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Check fleet health from on-chain data"
+              - "Calculate repair costs (resources needed)"
+              - "Estimate repair time"
+
+        feature_3_3:
+          name: "Market & Economic Tools"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 4
+          deliverables:
+            - "get_token_price tool (ATLAS, POLIS via CoinGecko)"
+            - "get_marketplace_orders tool (galactic marketplace)"
+            - "calculate_crafting_roi tool with profit analysis"
+            - "get_resource_info tool (availability, prices)"
+
+          task_3_3_1:
+            name: "Token Price Tool"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "Fetch ATLAS/POLIS prices from CoinGecko API"
+              - "Cache in DynamoDB with 5-min TTL"
+              - "Return price, 24h change, volume"
+            references:
+              - "archives/galactic-data CoinGecko integration"
+
+          task_3_3_2:
+            name: "Marketplace Orders Tool"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Fetch all order accounts from @staratlas/galactic-marketplace"
+              - "Filter by resource type"
+              - "Calculate best buy/sell prices"
+              - "Cache with 5-min TTL"
+
+          task_3_3_3:
+            name: "Crafting ROI Calculator"
+            complexity:
+              composite: 2.8
+            estimated_days: 1.5
+            deliverables:
+              - "Fetch crafting recipes from SAGE API"
+              - "Calculate input costs (market prices)"
+              - "Calculate output value"
+              - "Return profit margin, break-even analysis"
+
+        feature_3_4:
+          name: "Transaction & Wallet Tools"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 3
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "prepare_transaction tool (constructs unsigned tx)"
+            - "get_wallet_balance tool (SOL + SPL tokens)"
+            - "get_transaction_history tool (recent activity)"
+            - "NEVER auto-sign - always require user approval"
+
+          task_3_4_1:
+            name: "Transaction Preparation Tool"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Construct transaction with @solana/web3.js"
+              - "Return base64-encoded unsigned transaction"
+              - "Include transaction simulation results"
+              - "Estimate fee and success probability"
+
+          task_3_4_2:
+            name: "Wallet Balance Tool"
+            complexity:
+              composite: 1.5
+            estimated_days: 1
+            deliverables:
+              - "Fetch SOL balance via RPC"
+              - "Fetch SPL token balances (ATLAS, POLIS, resources)"
+              - "Return structured balance object"
+
+          task_3_4_3:
+            name: "Transaction History Tool"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Fetch recent signatures for user wallet"
+              - "Parse transaction details"
+              - "Filter by program ID (SAGE, marketplace)"
+
+      epic_4:
+        name: "Memory System & Personalization"
+        weeks: "6-8"
+        milestone: "Four-tier memory operational with vector search; personality progression triggers working"
+
+        feature_4_1:
+          name: "Session & Short-Term Memory"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 2
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "In-memory session context (last 10-20 messages)"
+            - "DynamoDB conversations table with 48-hour TTL"
+            - "Conversation threading with context window management"
+
+          task_4_1_1:
+            name: "Session Memory Implementation"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "Lambda in-memory cache for current session"
+              - "Message history array (FIFO, max 20 items)"
+              - "Context window size tracking (<8K tokens)"
+
+          task_4_1_2:
+            name: "Short-Term Memory DynamoDB"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "conversations table with user_id + timestamp PK"
+              - "48-hour TTL attribute"
+              - "Upsert conversation on each interaction"
+              - "Query recent conversations for context retrieval"
+            references:
+              - "docs/memory-architecture-spike.md § Recent Memory (Hot Cache)"
+
+          task_4_1_3:
+            name: "Conversation Threading"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Thread ID generation for multi-turn conversations"
+              - "Link related messages in same session"
+              - "Retrieve full thread for context"
+
+        feature_4_2:
+          name: "Long-Term Memory & Vector Store"
+          complexity:
+            composite: 3.2
+            dimensions:
+              technical_complexity: 4
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 4
+              risk: 3
+              testing: 3
+          estimated_days: 6
+          deliverables:
+            - "DynamoDB memories table for vector embeddings"
+            - "Bedrock Titan v2 integration for embedding generation"
+            - "Cosine similarity vector search"
+            - "Key memory extraction with Claude"
+
+          task_4_2_1:
+            name: "DynamoDB Vector Store Schema"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "memories table with user_id + memory_id PK"
+              - "embedding field (1024-dim binary)"
+              - "Metadata: type, summary, confidence, timestamp"
+              - "GSI on memory_type for filtering"
+            references:
+              - "docs/memory-architecture-spike.md § Long-Term Memory"
+
+          task_4_2_2:
+            name: "Bedrock Titan v2 Integration"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "AWS Bedrock client initialization"
+              - "Text embedding generation (Titan v2)"
+              - "Binary embedding optimization (50% cost savings)"
+              - "Batch processing for multiple texts"
+
+          task_4_2_3:
+            name: "Vector Search Implementation"
+            complexity:
+              composite: 3.5
+              needs_decomposition: true
+              decomposition_depth: 3
+              decomposition_reason: "High technical complexity (4.0) and uncertainty (3.5) in vector similarity algorithm optimization"
+            estimated_days: 3
+            deliverables:
+              - "Cosine similarity calculation"
+              - "Scan DynamoDB memories with pagination"
+              - "Top-K retrieval (return 5-10 most relevant)"
+              - "Similarity threshold tuning (0.7-0.8)"
+            status: "flagged_for_breakdown"
+            notes: "Complex algorithm requiring performance optimization for <200ms latency target"
+
+        feature_4_3:
+          name: "Key Memory Extraction & Compression"
+          complexity:
+            composite: 2.8
+            dimensions:
+              technical_complexity: 3
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 3
+              risk: 2
+              testing: 3
+          estimated_days: 4
+          deliverables:
+            - "Claude-based important moment detection"
+            - "Automatic memory summarization after 48 hours"
+            - "Compression pipeline (verbatim → summary → embedding)"
+            - "Memory reinforcement (user confirms preference)"
+
+          task_4_3_1:
+            name: "Important Moment Detection"
+            complexity:
+              composite: 2.8
+            estimated_days: 2
+            deliverables:
+              - "Claude prompt for identifying key memories"
+              - "Memory types: preference, goal, decision, context"
+              - "Confidence scoring (0-1)"
+              - "Store in memories table"
+            references:
+              - "docs/product-decisions-2025-11-12.md § Memory Retention"
+
+          task_4_3_2:
+            name: "Conversation Compression Pipeline"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Lambda cron job (daily) for old conversations"
+              - "Claude-generated summaries of 48-hour conversations"
+              - "Extract key memories, discard verbatim"
+              - "Update user profile with patterns"
+
+        feature_4_4:
+          name: "Personality Progression System"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 2
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 3
+              risk: 2
+              testing: 3
+          estimated_days: 4
+          deliverables:
+            - "Personality phase tracking (colleague → partner → friend)"
+            - "Phase transition triggers based on trust metrics"
+            - "Tone adaptation in prompts per phase"
+            - "User profile updates with relationship metrics"
+
+          task_4_4_1:
+            name: "Trust Score Calculation"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Trust score formula: (positive interactions / total) * session_count weight"
+              - "Positive: user confirms recommendation, shares context"
+              - "Negative: user corrects agent, rejects recommendation"
+              - "Update after each interaction"
+            references:
+              - "docs/memory-architecture-spike.md § Personality Progression"
+
+          task_4_4_2:
+            name: "Phase Transition Logic"
+            complexity:
+              composite: 2.3
+            estimated_days: 1.5
+            deliverables:
+              - "Colleague → Partner: trust_score > 0.6, sessions > 20"
+              - "Partner → Friend: trust_score > 0.8, sessions > 50"
+              - "Store personality_phase in user profile"
+              - "Log phase transitions for analytics"
+
+          task_4_4_3:
+            name: "Prompt Tone Adaptation"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "System prompts per phase (formal → conversational → casual)"
+              - "Response templates with phase-specific language"
+              - "Colleague: 'Shall I proceed?', Friend: 'I'll handle it'"
+
+      epic_5:
+        name: "Agent Core - Claude Agent SDK Integration"
+        weeks: "7-9"
+        milestone: "Agent responds to voice/text queries with memory-augmented context; MCP tools orchestrated correctly"
+
+        feature_5_1:
+          name: "Claude Agent SDK Setup"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "Agent SDK initialization with API key"
+            - "MCP server connection via stdio"
+            - "Conversation history management"
+            - "Error handling and retry logic"
+
+          task_5_1_1:
+            name: "Agent SDK Initialization"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Initialize Claude Agent SDK client"
+              - "Load MCP server from mcp-staratlas-server package"
+              - "Configure conversation parameters (model, temperature)"
+
+          task_5_1_2:
+            name: "MCP Tool Orchestration"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Dynamic tool discovery from MCP server"
+              - "Tool call routing based on agent requests"
+              - "Result formatting for agent context"
+
+          task_5_1_3:
+            name: "Error Handling & Fallbacks"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Catch MCP tool failures gracefully"
+              - "Return degraded responses when tools unavailable"
+              - "Log errors to CloudWatch"
+
+        feature_5_2:
+          name: "Memory-Augmented Prompt Engineering"
+          complexity:
+            composite: 2.8
+            dimensions:
+              technical_complexity: 3
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 3
+              risk: 2
+              testing: 3
+          estimated_days: 4
+          deliverables:
+            - "System prompt construction with user profile"
+            - "Retrieve relevant memories via vector search"
+            - "Inject personality phase into tone"
+            - "Context window optimization (<8K tokens)"
+
+          task_5_2_1:
+            name: "System Prompt Builder"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Base system prompt (role, capabilities, constraints)"
+              - "Inject user profile: name, preferences, goals"
+              - "Inject personality phase: colleague/partner/friend tone"
+              - "Inject relevant key memories (top 5 from vector search)"
+            references:
+              - "docs/memory-architecture-spike.md § RAG Implementation"
+
+          task_5_2_2:
+            name: "Memory Retrieval Integration"
+            complexity:
+              composite: 2.8
+            estimated_days: 2
+            deliverables:
+              - "Vector search query from user message"
+              - "Retrieve top 5-10 relevant memories"
+              - "Format memories for prompt injection"
+              - "Measure retrieval latency (<200ms)"
+
+          task_5_2_3:
+            name: "Context Window Management"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Token counting utility"
+              - "Trim conversation history if >8K tokens"
+              - "Prioritize recent messages + key memories"
+
+        feature_5_3:
+          name: "Response Generation & Post-Processing"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 2
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "Agent response formatting (voice vs text)"
+            - "Visualization generation triggers"
+            - "Memory extraction from responses"
+            - "Response caching for repeated queries"
+
+          task_5_3_1:
+            name: "Response Formatting"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "Detect voice vs text mode from request"
+              - "Voice: conversational, no technical jargon"
+              - "Text: technical, structured, can include links"
+              - "Trim response to <500 words for voice"
+
+          task_5_3_2:
+            name: "Visualization Triggers"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Detect 'why?' questions → show reasoning"
+              - "Detect high-stakes decisions → proactive visualization"
+              - "Generate chart URLs (delegate to visualization service)"
+              - "Include URLs in response metadata"
+            references:
+              - "docs/product-decisions-2025-11-12.md § Visualization Strategy"
+
+          task_5_3_3:
+            name: "Post-Response Memory Extraction"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Detect important moments in user response"
+              - "Extract preferences, goals, corrections"
+              - "Store in memories table asynchronously"
+
+      epic_6:
+        name: "Voice Service - WebRTC + STT + TTS"
+        weeks: "9-11"
+        milestone: "Push-to-talk voice interface working with <500ms round-trip latency; streaming STT/TTS operational"
+
+        feature_6_1:
+          name: "WebRTC Voice Streaming"
+          complexity:
+            composite: 3.0
+            dimensions:
+              technical_complexity: 4
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 3
+              risk: 3
+              testing: 3
+          estimated_days: 5
+          deliverables:
+            - "WebSocket server for voice streaming (ECS Fargate)"
+            - "WebRTC peer connection management"
+            - "Audio buffering and chunking"
+            - "Push-to-talk state management"
+
+          task_6_1_1:
+            name: "WebSocket Server Setup"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Node.js WebSocket server with ws library"
+              - "ECS Fargate task definition"
+              - "ALB WebSocket upgrade support"
+              - "Connection lifecycle management"
+            references:
+              - "docs/planning-session-2025-11-12.md § Voice service exception"
+
+          task_6_1_2:
+            name: "WebRTC Client Integration"
+            complexity:
+              composite: 3.0
+            estimated_days: 2
+            deliverables:
+              - "React useWebRTC hook"
+              - "MediaStream capture from microphone"
+              - "RTCPeerConnection setup"
+              - "Audio chunk encoding (Opus codec)"
+
+          task_6_1_3:
+            name: "Push-to-Talk UX"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Spacebar hold for desktop"
+              - "Button tap-and-hold for mobile"
+              - "Visual recording indicator"
+              - "Audio level visualization"
+
+        feature_6_2:
+          name: "Speech-to-Text Integration (Whisper)"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "OpenAI Whisper API integration"
+            - "Streaming STT for real-time transcription"
+            - "Transcription accuracy tuning"
+            - "Cost optimization (batch small chunks)"
+
+          task_6_2_1:
+            name: "Whisper API Client"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "OpenAI API client in voice-service"
+              - "Audio file conversion (WebM → MP3)"
+              - "Send audio chunks to Whisper"
+              - "Return transcription text"
+
+          task_6_2_2:
+            name: "Streaming Transcription"
+            complexity:
+              composite: 2.8
+            estimated_days: 1.5
+            deliverables:
+              - "Buffer audio chunks (1-2 sec windows)"
+              - "Send to Whisper as user speaks"
+              - "Emit partial transcriptions to client"
+              - "Finalize on push-to-talk release"
+
+        feature_6_3:
+          name: "Text-to-Speech Integration (ElevenLabs)"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "ElevenLabs API integration"
+            - "Voice selection (agent personality)"
+            - "Streaming TTS for low latency"
+            - "Audio caching for repeated phrases"
+
+          task_6_3_1:
+            name: "ElevenLabs API Client"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "ElevenLabs client in voice-service"
+              - "Voice ID selection (Bella/Adam/etc)"
+              - "Text-to-audio conversion"
+              - "Return audio stream (MP3)"
+
+          task_6_3_2:
+            name: "Streaming TTS Playback"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Stream audio chunks to client as generated"
+              - "Web Audio API playback in browser"
+              - "Queue multiple audio chunks"
+              - "Measure latency (<500ms target)"
+
+        feature_6_4:
+          name: "Voice Latency Optimization"
+          complexity:
+            composite: 2.8
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 3
+              risk: 3
+              testing: 4
+          estimated_days: 4
+          deliverables:
+            - "End-to-end latency measurement"
+            - "Parallel STT + agent processing"
+            - "Audio chunk size tuning"
+            - "Performance monitoring dashboard"
+
+          task_6_4_1:
+            name: "Latency Measurement System"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Timestamp each step: audio capture → STT → agent → TTS → playback"
+              - "Calculate round-trip latency"
+              - "Log to CloudWatch metrics"
+              - "Alert if >500ms for 3 consecutive requests"
+
+          task_6_4_2:
+            name: "Parallel Processing Pipeline"
+            complexity:
+              composite: 3.0
+            estimated_days: 2
+            deliverables:
+              - "Start agent processing during STT (streaming)"
+              - "Pipeline: Capture → STT → Agent → TTS (overlapping)"
+              - "Reduce sequential wait time by 30-40%"
+
+          task_6_4_3:
+            name: "Audio Chunk Tuning"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Test chunk sizes: 500ms, 1s, 2s"
+              - "Measure latency vs accuracy trade-off"
+              - "Select optimal size for <500ms target"
+
+      epic_7:
+        name: "Web Application - Frontend UI"
+        weeks: "10-12"
+        milestone: "React app deployed to CloudFront; push-to-talk working; fleet status dashboard visible"
+
+        feature_7_1:
+          name: "Core UI Layout & Navigation"
+          complexity:
+            composite: 2.0
+            dimensions:
+              technical_complexity: 2
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 2
+          estimated_days: 2
+          deliverables:
+            - "React Router setup with routes"
+            - "App shell with header, sidebar, main content"
+            - "Responsive layout (mobile + desktop)"
+            - "Dark mode toggle"
+
+          task_7_1_1:
+            name: "React Router Configuration"
+            complexity:
+              composite: 1.5
+            estimated_days: 0.5
+            deliverables:
+              - "Routes: / (dashboard), /fleets, /profile, /settings"
+              - "Protected routes with auth check"
+              - "404 page"
+
+          task_7_1_2:
+            name: "App Shell Components"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Header with logo, nav links, user menu"
+              - "Sidebar for navigation (collapsible)"
+              - "Main content area with padding"
+              - "Tailwind CSS responsive classes"
+
+          task_7_1_3:
+            name: "Dark Mode Support"
+            complexity:
+              composite: 1.5
+            estimated_days: 0.5
+            deliverables:
+              - "useTheme hook with localStorage persistence"
+              - "Tailwind dark: classes on components"
+              - "Toggle button in header"
+
+        feature_7_2:
+          name: "Push-to-Talk Voice Interface"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "PushToTalk component with recording UI"
+            - "WebRTC integration with voice service"
+            - "Transcription display (real-time)"
+            - "Audio playback of agent responses"
+
+          task_7_2_1:
+            name: "PushToTalk Component"
+            complexity:
+              composite: 2.3
+            estimated_days: 1.5
+            deliverables:
+              - "Button with spacebar event listener"
+              - "Recording state: idle, recording, processing"
+              - "Visual feedback (pulsing animation, waveform)"
+              - "Mobile touch-and-hold support"
+
+          task_7_2_2:
+            name: "Voice Service WebSocket Client"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "useVoice hook for WebSocket connection"
+              - "Send audio chunks on recording"
+              - "Receive transcriptions and responses"
+              - "Handle connection errors/reconnect"
+
+        feature_7_3:
+          name: "Fleet Status Dashboard"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 2
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 2
+          estimated_days: 3
+          deliverables:
+            - "Fleet list with status cards"
+            - "Fuel/cargo/health indicators"
+            - "Alert badges for low fuel/damage"
+            - "Refresh button for manual updates"
+
+          task_7_3_1:
+            name: "Fleet List Component"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Fetch fleets from /api/fleets"
+              - "Display as cards with name, location, status"
+              - "TanStack Query for caching"
+              - "Loading and error states"
+
+          task_7_3_2:
+            name: "Status Indicators"
+            complexity:
+              composite: 1.8
+            estimated_days: 1
+            deliverables:
+              - "Progress bars for fuel %, cargo %, health %"
+              - "Color coding: green (>50%), yellow (20-50%), red (<20%)"
+              - "Alert icons for critical states"
+
+          task_7_3_3:
+            name: "Fleet Detail Modal"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Click fleet card → open modal"
+              - "Detailed stats: exact fuel, cargo breakdown, repair costs"
+              - "Action buttons: refuel, repair (prepare transaction)"
+
+        feature_7_4:
+          name: "Visualization Components (Trust Building)"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "Chart.js integration for price charts"
+            - "Decision breakdown component (weighted factors)"
+            - "Reasoning transparency modal"
+            - "On-demand rendering (user clicks 'show me')"
+
+          task_7_4_1:
+            name: "Chart.js Components"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "LineChart for price history"
+              - "BarChart for comparison (Route A vs B)"
+              - "Fetch chart data from backend"
+              - "Lazy load charts (only when visible)"
+            references:
+              - "docs/product-decisions-2025-11-12.md § Visualization Strategy"
+
+          task_7_4_2:
+            name: "Reasoning Transparency Modal"
+            complexity:
+              composite: 2.3
+            estimated_days: 1.5
+            deliverables:
+              - "Show decision factors with weights"
+              - "Display data sources used"
+              - "Highlight user preferences in reasoning"
+              - "Open when user asks 'why?'"
+
+      epic_8:
+        name: "MVP Polish & Launch Preparation"
+        weeks: "12-14"
+        milestone: "MVP fully functional, tested, documented, and deployed to production"
+
+        feature_8_1:
+          name: "End-to-End Testing"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 2
+              scope_size: 3
+              dependencies: 3
+              uncertainty: 2
+              risk: 3
+              testing: 4
+          estimated_days: 4
+          deliverables:
+            - "Playwright E2E tests for critical flows"
+            - "Voice latency performance tests"
+            - "Memory retrieval accuracy tests"
+            - "Cost tracking tests (AWS Free Tier limits)"
+
+          task_8_1_1:
+            name: "Critical Flow E2E Tests"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Test: Email magic link → wallet connect → fleet check"
+              - "Test: Push-to-talk voice query → agent response"
+              - "Test: Memory persistence across sessions"
+              - "Playwright scripts with screenshots on failure"
+
+          task_8_1_2:
+            name: "Performance Testing"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Voice latency test suite (target <500ms)"
+              - "Vector search latency test (target <200ms)"
+              - "Load test: 50 concurrent users"
+              - "Results logged to CloudWatch"
+
+          task_8_1_3:
+            name: "Cost Validation Tests"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Monitor AWS costs daily during test period"
+              - "Validate <$35/month with 50 test users"
+              - "Identify cost outliers (unexpected charges)"
+              - "Document cost breakdown"
+
+        feature_8_2:
+          name: "Documentation & User Guides"
+          complexity:
+            composite: 2.0
+            dimensions:
+              technical_complexity: 1
+              scope_size: 3
+              dependencies: 1
+              uncertainty: 2
+              risk: 1
+              testing: 2
+          estimated_days: 3
+          deliverables:
+            - "User onboarding guide (video + text)"
+            - "Voice command cheat sheet"
+            - "FAQ page"
+            - "API documentation (for future integrations)"
+
+          task_8_2_1:
+            name: "User Onboarding Content"
+            complexity:
+              composite: 1.8
+            estimated_days: 1.5
+            deliverables:
+              - "Step-by-step guide: email → wallet → first fleet check"
+              - "Voice command examples"
+              - "Troubleshooting common issues"
+
+          task_8_2_2:
+            name: "Technical Documentation"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "API endpoint documentation (OpenAPI spec)"
+              - "MCP tools reference"
+              - "Architecture diagrams (C4 model)"
+              - "Deployment guide"
+
+        feature_8_3:
+          name: "Monitoring & Alerting"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 2
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 3
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "CloudWatch dashboards for key metrics"
+            - "Cost alarms (>$40/month)"
+            - "Error rate alarms (>5% failures)"
+            - "Latency alarms (voice >500ms)"
+
+          task_8_3_1:
+            name: "CloudWatch Dashboards"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Dashboard: API request count, latency, errors"
+              - "Dashboard: Voice service metrics (STT/TTS latency)"
+              - "Dashboard: DynamoDB read/write units"
+              - "Dashboard: AWS costs (daily)"
+
+          task_8_3_2:
+            name: "Alerting Rules"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "SNS topic for critical alerts"
+              - "Alarm: Cost >$40/month"
+              - "Alarm: API error rate >5%"
+              - "Alarm: Voice latency >500ms for 3 requests"
+
+        feature_8_4:
+          name: "Launch Checklist & Deployment"
+          complexity:
+            composite: 2.0
+            dimensions:
+              technical_complexity: 2
+              scope_size: 2
+              dependencies: 3
+              uncertainty: 2
+              risk: 3
+              testing: 2
+          estimated_days: 2
+          deliverables:
+            - "Production deployment runbook"
+            - "Security audit checklist"
+            - "Backup and rollback procedures"
+            - "Go-live checklist"
+
+          task_8_4_1:
+            name: "Production Deployment"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "Terraform apply to production environment"
+              - "Deploy frontend to CloudFront"
+              - "Smoke tests on production endpoints"
+              - "Verify SSL certificates and DNS"
+
+          task_8_4_2:
+            name: "Security & Backup"
+            complexity:
+              composite: 2.0
+            estimated_days: 1
+            deliverables:
+              - "IAM policy review (least privilege)"
+              - "Enable DynamoDB point-in-time recovery"
+              - "S3 bucket versioning for frontend"
+              - "Secrets rotation documentation"
+
+  milestone_2:
+    name: "Post-MVP - Spikes & Optimizations"
+    timeline_weeks: "15-20 (sporadic)"
+    description: "Research spikes for uncertain areas and cost optimizations based on real user data"
+    success_criteria:
+      - "z.ink/zProfile integration feasibility documented"
+      - "Subscription tier pricing validated with A/B tests"
+      - "Memory system optimized to <$25/month per 100 users"
+
+    epics:
+      epic_9:
+        name: "Research Spikes"
+        weeks: "15-17"
+        milestone: "Complete research for uncertain technical areas"
+
+        feature_9_1:
+          name: "z.ink / zProfile Integration Spike"
+          complexity:
+            composite: 2.0
+            dimensions:
+              technical_complexity: 2
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 4
+              risk: 1
+              testing: 1
+          estimated_days: 5
+          type: "research"
+          deliverables:
+            - "Developer API availability assessment"
+            - "Third-party app integration flow documented"
+            - "Email-to-zProfile linking feasibility"
+            - "Cost per operation analysis"
+            - "Technical feasibility report with integration plan"
+
+          task_9_1_1:
+            name: "z.ink API Research"
+            complexity:
+              composite: 2.0
+            estimated_days: 3
+            deliverables:
+              - "Review z.ink developer documentation (post-Dec 2025 launch)"
+              - "Test API endpoints with sample app"
+              - "Document authentication flow"
+              - "List available features (SSO, permissioning, KYC)"
+            references:
+              - "docs/product-decisions-2025-11-12.md § zProfile Integration (Spike Required)"
+
+          task_9_1_2:
+            name: "Integration Feasibility Analysis"
+            complexity:
+              composite: 1.8
+            estimated_days: 2
+            deliverables:
+              - "Can third-party apps create zProfiles? (yes/no)"
+              - "Email-based identity support? (yes/no)"
+              - "Minimal friction path for existing wallet → zProfile"
+              - "Cost estimate per user"
+              - "Go/no-go recommendation"
+
+        feature_9_2:
+          name: "Subscription Tier Feature Distribution Spike"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 2
+              scope_size: 3
+              dependencies: 2
+              uncertainty: 4
+              risk: 2
+              testing: 2
+          estimated_days: 8
+          type: "research"
+          deliverables:
+            - "User feedback analysis on valuable features"
+            - "Free tier feature set recommendation"
+            - "Pricing strategy with A/B test plan"
+            - "Retention policy validation"
+
+          task_9_2_1:
+            name: "User Value Analysis"
+            complexity:
+              composite: 2.5
+            estimated_days: 4
+            deliverables:
+              - "Survey 50 MVP users on feature value (1-5 rating)"
+              - "Analyze usage data: which features used most?"
+              - "Identify 'must-have' vs 'nice-to-have'"
+              - "Document willingness to pay per feature"
+            references:
+              - "docs/product-decisions-2025-11-12.md § Subscription Tier Decision"
+
+          task_9_2_2:
+            name: "Pricing Strategy Development"
+            complexity:
+              composite: 2.0
+            estimated_days: 2
+            deliverables:
+              - "Free tier: 5 fleets, 100 voice queries/month, 7-day memory"
+              - "Pro tier: Unlimited, full memory, optimizations ($7.99-$14.99)"
+              - "Ultimate tier: Automation, guilds ($19.99-$29.99)"
+              - "A/B test plan for price points"
+
+          task_9_2_3:
+            name: "Retention Policy Validation"
+            complexity:
+              composite: 2.0
+            estimated_days: 2
+            deliverables:
+              - "Test 'Audible model' with 10 users (cancel → re-subscribe)"
+              - "Measure re-subscription rate"
+              - "Compare vs industry benchmarks"
+              - "Refine retention policy based on feedback"
+
+        feature_9_3:
+          name: "Memory Cost Optimization Spike"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 4
+              risk: 2
+              testing: 3
+          estimated_days: 6
+          type: "research"
+          deliverables:
+            - "Actual DynamoDB costs with 50-100 real users"
+            - "Compression effectiveness measurement"
+            - "Key memory extraction accuracy validation"
+            - "Optimized architecture recommendations"
+
+          task_9_3_1:
+            name: "Cost Measurement Pilot"
+            complexity:
+              composite: 2.0
+            estimated_days: 2
+            deliverables:
+              - "Deploy to 50-100 beta users for 30 days"
+              - "Track daily AWS costs (DynamoDB, Bedrock)"
+              - "Measure actual embeddings per user"
+              - "Calculate cost per user per month"
+            references:
+              - "docs/memory-architecture-spike.md § Cost Analysis"
+
+          task_9_3_2:
+            name: "Compression Effectiveness Test"
+            complexity:
+              composite: 2.5
+            estimated_days: 2
+            deliverables:
+              - "Measure storage reduction: verbatim → summary → embedding"
+              - "Validate 95% cost reduction claim"
+              - "Test information loss in compression"
+              - "User satisfaction survey (do they notice compression?)"
+
+          task_9_3_3:
+            name: "Memory Extraction Accuracy"
+            complexity:
+              composite: 2.8
+            estimated_days: 2
+            deliverables:
+              - "Manual review of 100 key memory extractions"
+              - "False positive rate (unimportant memories stored)"
+              - "False negative rate (important memories missed)"
+              - "Tune Claude prompts to improve accuracy"
+
+      epic_10:
+        name: "Cost & Performance Optimizations"
+        weeks: "18-20"
+        milestone: "MVP costs reduced through optimization; performance improvements deployed"
+
+        feature_10_1:
+          name: "DynamoDB Query Optimization"
+          complexity:
+            composite: 2.3
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "Add GSIs for common query patterns"
+            - "Implement pagination for large scans"
+            - "Batch read/write operations"
+            - "Reduce RCU/WCU usage by 30%"
+
+          task_10_1_1:
+            name: "GSI Analysis & Implementation"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Analyze query patterns from CloudWatch"
+              - "Add GSI on memories.memory_type"
+              - "Add GSI on conversations.thread_id"
+              - "Measure query latency improvement"
+
+          task_10_1_2:
+            name: "Batch Operations"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Use BatchGetItem for multi-fleet queries"
+              - "Use BatchWriteItem for memory updates"
+              - "Reduce API calls by 60%"
+
+        feature_10_2:
+          name: "Lambda Cold Start Reduction"
+          complexity:
+            composite: 2.5
+            dimensions:
+              technical_complexity: 3
+              scope_size: 2
+              dependencies: 2
+              uncertainty: 2
+              risk: 2
+              testing: 3
+          estimated_days: 3
+          deliverables:
+            - "Lambda provisioned concurrency for agent-core"
+            - "Reduce package size with tree-shaking"
+            - "Lazy load dependencies"
+            - "Cold start <1s (from <2s)"
+
+          task_10_2_1:
+            name: "Provisioned Concurrency"
+            complexity:
+              composite: 2.0
+            estimated_days: 1.5
+            deliverables:
+              - "Enable provisioned concurrency: 1-2 instances"
+              - "Terraform configuration with cost estimate"
+              - "Monitor cold start frequency reduction"
+
+          task_10_2_2:
+            name: "Package Size Optimization"
+            complexity:
+              composite: 2.5
+            estimated_days: 1.5
+            deliverables:
+              - "Webpack/esbuild tree-shaking"
+              - "Remove unused dependencies"
+              - "Split large packages into layers"
+              - "Reduce bundle size by 40%"
+
+agent_blueprint:
+  total_estimated_agents: 12
+  parallel_capacity: 4
+  types_needed:
+    - type: "infrastructure-dev"
+      count: 2
+      focus_areas: ["Terraform", "AWS Lambda", "DynamoDB", "CI/CD"]
+    - type: "backend-dev"
+      count: 3
+      focus_areas: ["Node.js", "MCP server", "Agent SDK", "Memory system"]
+    - type: "voice-dev"
+      count: 2
+      focus_areas: ["WebRTC", "Whisper STT", "ElevenLabs TTS", "latency optimization"]
+    - type: "frontend-dev"
+      count: 2
+      focus_areas: ["React", "Vite", "WebRTC client", "visualizations"]
+    - type: "blockchain-dev"
+      count: 2
+      focus_areas: ["Solana", "Star Atlas SAGE", "wallet integration"]
+    - type: "research-analyst"
+      count: 1
+      focus_areas: ["Spikes", "cost analysis", "user research"]
+
+feature_specifications:
+  - feature: "Voice Round-Trip Latency"
+    description: "User speaks → agent responds in <500ms for 90% of interactions"
+    complexity: "high"
+    assigned_agents: 2
+    acceptance_criteria:
+      - "Measured latency <500ms on 10 test sessions"
+      - "Streaming STT/TTS operational"
+      - "Parallel processing pipeline reduces wait time by 30%"
+
+  - feature: "Memory-Augmented Personalization"
+    description: "Agent remembers user preferences and adapts tone (colleague → partner → friend)"
+    complexity: "high"
+    assigned_agents: 3
+    acceptance_criteria:
+      - "User preferences persist across sessions"
+      - "Trust score increases with positive interactions"
+      - "Personality phase transitions at correct thresholds"
+      - "Vector search retrieves relevant context in <200ms"
+
+  - feature: "Handshake UX Onboarding"
+    description: "New user completes email → first interaction in <30 seconds"
+    complexity: "medium"
+    assigned_agents: 2
+    acceptance_criteria:
+      - "Email magic link flow completes in <30 sec for 90% of users"
+      - "Agent greets user by name after first login"
+      - "Wallet connection optional, can be skipped"
+
+  - feature: "AWS Free Tier Budget"
+    description: "MVP operates within <$35/month with 50 test users"
+    complexity: "medium"
+    assigned_agents: 2
+    acceptance_criteria:
+      - "30-day cost tracking shows <$35/month"
+      - "Cost alarms trigger at $40/month"
+      - "Optimization recommendations documented"
+
+testing_strategy:
+  levels:
+    - level: "unit"
+      scope: "Individual functions, MCP tools, Lambda handlers"
+      tools: ["Jest", "Vitest"]
+
+    - level: "integration"
+      scope: "MCP server ↔ Agent SDK, DynamoDB ↔ Memory service, WebRTC ↔ Voice service"
+      tools: ["Jest", "Supertest", "DynamoDB Local"]
+
+    - level: "e2e"
+      scope: "Critical user flows: auth, voice query, fleet check, memory persistence"
+      tools: ["Playwright"]
+
+    - level: "performance"
+      scope: "Voice latency <500ms, vector search <200ms, load testing (50 concurrent users)"
+      tools: ["Artillery", "CloudWatch"]
+
+    - level: "cost-validation"
+      scope: "AWS costs <$35/month with 50 users, Free Tier usage monitoring"
+      tools: ["AWS Cost Explorer", "custom scripts"]
+
+project_structure:
+  pattern: "vertical-slice"
+  description: "Monorepo with pnpm workspaces, each package is self-contained with minimal cross-package dependencies"
+  directories:
+    - path: "specs/"
+      purpose: "Architectural documentation and this blueprint"
+
+    - path: "docs/"
+      purpose: "Planning sessions, product decisions, memory architecture spike"
+
+    - path: "packages/web-app/"
+      purpose: "React frontend with push-to-talk voice UX"
+      structure: "src/components/, src/hooks/, src/pages/, src/services/"
+
+    - path: "packages/mcp-staratlas-server/"
+      purpose: "MCP tools for Star Atlas + Solana blockchain"
+      structure: "src/tools/, src/clients/, src/cache/"
+
+    - path: "packages/agent-core/"
+      purpose: "Claude Agent SDK orchestration with memory-augmented prompts"
+      structure: "src/agent/, src/memory/, src/prompts/"
+
+    - path: "packages/voice-service/"
+      purpose: "WebRTC + Whisper STT + ElevenLabs TTS"
+      structure: "src/websocket/, src/stt/, src/tts/"
+
+    - path: "packages/memory-service/"
+      purpose: "Four-tier memory architecture with DynamoDB vector store"
+      structure: "src/session/, src/short-term/, src/long-term/, src/vectors/"
+
+    - path: "terraform/"
+      purpose: "Infrastructure as Code for AWS deployment"
+      structure: "modules/, environments/, backend.tf, main.tf"
+
+    - path: ".github/workflows/"
+      purpose: "CI/CD pipelines for test, build, deploy"
+
+cost_estimates:
+  mvp_monthly_cost: "$28-35"
+  breakdown:
+    - component: "Lambda + API Gateway"
+      cost: "$0 (Free Tier 1M requests)"
+    - component: "DynamoDB (data + vectors)"
+      cost: "$10-15 (beyond 25GB Free Tier)"
+    - component: "S3 + CloudFront"
+      cost: "$0 (Free Tier 50GB + 1TB transfer)"
+    - component: "ECS Fargate (voice service)"
+      cost: "$3-5"
+    - component: "Bedrock Titan v2 (embeddings)"
+      cost: "$8-10"
+    - component: "Whisper + ElevenLabs"
+      cost: "$5-7 (usage-based)"
+
+  optimization_opportunities:
+    - "Binary embeddings: -50% Bedrock cost ($4/month savings)"
+    - "3-day TTL vs 7-day: -$2/month DynamoDB"
+    - "Batch embedding requests: -$3/month Lambda"
+    - "Optimized target: $20-25/month"
+
+timeline_summary:
+  total_weeks: "14-20 (AI-adjusted with 20x speedup)"
+  total_estimated_days: "117 (across all features/tasks)"
+  note: "Timeline assumes sporadic work pattern with AI-assisted development. Adjust based on actual velocity after first 2 weeks."
+
+  milestones:
+    - milestone: "v1.0 MVP Release"
+      weeks: "12-14"
+      focus: "Core functionality operational, deployed to production"
+
+    - milestone: "Post-MVP Spikes & Optimizations"
+      weeks: "15-20"
+      focus: "Research uncertain areas, optimize costs based on real data"
+
+documentation_references:
+  planning: "docs/planning-session-2025-11-12.md"
+  memory: "docs/memory-architecture-spike.md"
+  product: "docs/product-decisions-2025-11-12.md"
+  architecture: "ARCHITECTURE.md"
+  status: "STATUS.md"
+  contributing: "CONTRIBUTING.md (to be created)"
+  development: "DEVELOPMENT.md (to be created)"
+
+notes:
+  - "All complexity scores target ≤3.0 for actionable tasks"
+  - "Tasks >3.0 flagged with needs_decomposition=true for delegation"
+  - "Spikes (research tasks) have high uncertainty (UA ≥4) by design"
+  - "Cost constraint of <$35/month drives serverless architecture choices"
+  - "Voice latency <500ms is critical success metric - prioritize optimization"
+  - "Memory personalization is key differentiator - invest in quality implementation"
+  - "Progressive authentication (email → wallet → zProfile) reduces onboarding friction"
+  - "Trust-building visualizations are secondary UX - implement after core functionality"
+  - "AWS Free Tier optimization is temporary - plan migration path for scale"
