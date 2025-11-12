@@ -1,0 +1,512 @@
+---
+project:
+  name: Star Atlas Agent
+  description: Voice-first AI assistant for Star Atlas with on-chain monitoring and natural language game control
+  repository: IAMSamuelRodda/star-atlas-agent
+
+milestones:
+  - name: "MVP: Foundation"
+    description: Core infrastructure and basic functionality
+    due_date: "2025-12-15"
+    epics:
+      - name: Project Infrastructure & Setup
+        description: Initialize repository structure, configure tooling, and set up development environment
+        labels:
+          - "type: epic"
+          - "priority: critical"
+        estimated_days: 5
+        features:
+          - name: Repository structure and monorepo setup
+            description: Configure pnpm workspace, TypeScript configs, and package structure
+            estimated_days: 1
+            labels:
+              - "type: feature"
+          - name: Development environment configuration
+            description: Set up linting, formatting, pre-commit hooks, and CI/CD pipeline
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Documentation structure
+            description: Create comprehensive docs (README, ARCHITECTURE, CONTRIBUTING, DEVELOPMENT)
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Price Monitoring Integration
+        description: Extend galactic-data package with real-time price tracking and MCP tool wrappers
+        labels:
+          - "type: epic"
+          - "priority: high"
+        estimated_days: 8
+        features:
+          - name: Refactor galactic-data for monorepo
+            description: Update import paths, Firebase config, and Docker setup for workspace integration
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Firestore integration and caching
+            description: Implement price history queries, caching strategy, and real-time subscriptions
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: MCP tool wrappers for price data
+            description: Create MCP tools for get_asset_price, track_price_history, search_marketplace
+            estimated_days: 3
+            labels:
+              - "type: feature"
+
+      - name: SAGE API Fleet Management
+        description: Integrate @staratlas/sage for fleet status queries and game mechanics
+        labels:
+          - "type: epic"
+          - "priority: high"
+        estimated_days: 10
+        features:
+          - name: SAGE client initialization
+            description: Set up @staratlas/sage client with Solana connection and program accounts
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Fleet status queries
+            description: Implement get_fleet_status, get_fleet_inventory tools
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Fleet movement commands
+            description: Build move_fleet tool with transaction building and approval flow
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Solana WebSocket monitoring
+            description: Set up account change subscriptions for real-time fleet updates
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Basic Agent with Text Commands
+        description: Implement Claude Agent SDK orchestrator with text-based command processing
+        labels:
+          - "type: epic"
+          - "priority: high"
+        estimated_days: 12
+        features:
+          - name: Agent core setup
+            description: Initialize Claude Agent SDK, session management, and context tracking
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: MCP server integration
+            description: Connect agent to MCP tools (marketplace, fleet, crafting)
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Sub-agent architecture
+            description: Create Market Analyst, Fleet Commander, and Craft Optimizer agents
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Command vocabulary and parsing
+            description: Define natural language command patterns and intent recognition
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Voice Service Foundation
+        description: Build STT/TTS pipeline with WebRTC signaling for voice interaction
+        labels:
+          - "type: epic"
+          - "priority: high"
+        estimated_days: 15
+        features:
+          - name: WebRTC signaling server
+            description: Set up WebSocket signaling for peer connections and ICE candidate exchange
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Whisper STT integration
+            description: Integrate OpenAI Whisper API for speech-to-text conversion
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: ElevenLabs TTS integration
+            description: Integrate ElevenLabs API for natural voice synthesis
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Voice Activity Detection (VAD)
+            description: Implement VAD to detect speech start/end and optimize API calls
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Audio streaming and codec optimization
+            description: Configure Opus codec and optimize for low-latency audio streaming
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Push-to-Talk Interface
+        description: Build web UI with voice controls, push-to-talk button, and visual feedback
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 8
+        features:
+          - name: React web app scaffolding
+            description: Set up Vite + React + TypeScript with component structure
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Push-to-talk component
+            description: Build microphone capture with visual recording indicator and waveform
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Audio playback controls
+            description: Implement audio playback for agent responses with volume controls
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Voice service client
+            description: WebRTC client for connecting to voice service and handling streams
+            estimated_days: 1
+            labels:
+              - "type: feature"
+
+  - name: "Phase 2: Enhancement"
+    description: Advanced features, mobile optimization, and wake word activation
+    due_date: "2026-02-15"
+    epics:
+      - name: Advanced Market Analysis
+        description: Trend analysis, trading recommendations, and alert system
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 10
+        features:
+          - name: Price trend analysis algorithms
+            description: Implement historical analysis, trend identification, and volatility metrics
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Trading recommendations engine
+            description: Build recommendation system based on market conditions and user portfolio
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Alert management system
+            description: Create price threshold alerts with Firebase Cloud Messaging notifications
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Crafting Optimization Calculator
+        description: Recipe analysis, cost calculation, and resource allocation planning
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 8
+        features:
+          - name: Recipe database and search
+            description: Integrate Galaxy API crafting recipes with search and filtering
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Cost calculation engine
+            description: Real-time cost analysis with material prices and alternative comparisons
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Resource allocation optimizer
+            description: Optimize material usage across multiple crafting recipes
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: WebSocket Real-Time Updates
+        description: Firestore subscriptions and push notifications for live data
+        labels:
+          - "type: epic"
+          - "priority: high"
+        estimated_days: 6
+        features:
+          - name: Firestore real-time subscriptions
+            description: Set up onSnapshot listeners for prices, fleets, and alerts
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: WebSocket connection management
+            description: Implement reconnection logic, heartbeat, and connection pooling
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Push notification system
+            description: Firebase Cloud Messaging integration for mobile and desktop notifications
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Wake Word Activation
+        description: Always-on listening with "Hey Cortana" wake word detection
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 7
+        features:
+          - name: Wake word detection model
+            description: Integrate Porcupine or Snowboy for wake word detection
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Privacy controls and indicators
+            description: Visual indicators for listening state and privacy settings
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Low-power listening mode
+            description: Optimize for battery efficiency on mobile devices
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Mobile-Responsive Interface
+        description: Optimize UI for mobile devices with touch controls and responsive layouts
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 8
+        features:
+          - name: Responsive layout design
+            description: Implement mobile-first CSS with breakpoints and touch-optimized components
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: PWA configuration
+            description: Service worker, offline support, and app manifest for installation
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Touch gesture controls
+            description: Swipe, pinch-to-zoom for star map, and tap-to-hold for voice
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+  - name: "Phase 3: Advanced Features"
+    description: z.ink integration, 3D visualization, and multi-wallet support
+    due_date: "2026-05-15"
+    epics:
+      - name: z.ink Layer 1 Integration
+        description: Migrate to z.ink blockchain with zProfiles and dApp permissions
+        labels:
+          - "type: epic"
+          - "priority: high"
+        estimated_days: 15
+        features:
+          - name: z.ink testnet integration
+            description: Connect to z.ink testnet and verify SVM compatibility
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: zProfiles identity system
+            description: Implement zProfile authentication and identity-linked accounts
+            estimated_days: 5
+            labels:
+              - "type: feature"
+          - name: dApp permissioning
+            description: Set up automatic transaction limits and spending controls
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Dual-chain support (Solana + z.ink)
+            description: Support both chains during migration period with fallback logic
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Advanced Voice Conversations
+        description: Context-aware multi-turn conversations with emotion detection
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 10
+        features:
+          - name: Multi-turn conversation management
+            description: Maintain context across conversation turns with memory and references
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Voice emotion detection
+            description: Analyze voice tone and emotion to adapt agent responses
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Multi-language support
+            description: Add support for Spanish, Chinese, and Japanese
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: 3D Map Visualization
+        description: Interactive star map with fleet positions and movement paths using Three.js
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 12
+        features:
+          - name: Three.js star map rendering
+            description: Create 3D star field with sectors, planets, and star systems
+            estimated_days: 5
+            labels:
+              - "type: feature"
+          - name: Fleet markers and movement paths
+            description: Display fleet positions with real-time movement visualization
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Interactive camera controls
+            description: Implement pan, zoom, rotate controls with sector selection
+            estimated_days: 3
+            labels:
+              - "type: feature"
+
+      - name: Multi-Wallet Support
+        description: Support Phantom, Solflare, and hardware wallets with wallet switching
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 6
+        features:
+          - name: Wallet adapter integration
+            description: Integrate @solana/wallet-adapter with multiple wallet providers
+            estimated_days: 2
+            labels:
+              - "type: feature"
+          - name: Hardware wallet support
+            description: Add Ledger and Trezor support with signing flows
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Wallet switching and multi-account
+            description: Allow users to switch between wallets and manage multiple accounts
+            estimated_days: 1
+            labels:
+              - "type: feature"
+
+      - name: Trading Automation (with Approval)
+        description: Automated trading strategies with user-defined rules and approval flows
+        labels:
+          - "type: epic"
+          - "priority: low"
+        estimated_days: 15
+        features:
+          - name: Trading strategy builder
+            description: UI for defining trading rules, triggers, and conditions
+            estimated_days: 5
+            labels:
+              - "type: feature"
+          - name: Strategy execution engine
+            description: Monitor market conditions and execute trades based on rules
+            estimated_days: 6
+            labels:
+              - "type: feature"
+          - name: Approval workflows and safeguards
+            description: Require explicit approval for trades with spending limits and cooldowns
+            estimated_days: 4
+            labels:
+              - "type: feature"
+
+  - name: "Phase 4: Vision"
+    description: Full Cortana experience with proactive suggestions, VR/AR, and social features
+    due_date: "2026-09-15"
+    epics:
+      - name: Full Cortana-like Experience
+        description: Proactive suggestions, personality, and contextual awareness
+        labels:
+          - "type: epic"
+          - "priority: medium"
+        estimated_days: 20
+        features:
+          - name: Proactive suggestion engine
+            description: AI-driven recommendations for trading, missions, and optimizations
+            estimated_days: 8
+            labels:
+              - "type: feature"
+          - name: Personality and voice customization
+            description: Customize agent personality, voice, and response style
+            estimated_days: 6
+            labels:
+              - "type: feature"
+          - name: Contextual awareness system
+            description: Learn user preferences, habits, and predict needs
+            estimated_days: 6
+            labels:
+              - "type: feature"
+
+      - name: Faction-Specific Features
+        description: Faction intelligence, guild coordination, and territory tracking
+        labels:
+          - "type: epic"
+          - "priority: low"
+        estimated_days: 12
+        features:
+          - name: Faction intelligence dashboard
+            description: Track faction activities, territory control, and political events
+            estimated_days: 5
+            labels:
+              - "type: feature"
+          - name: Guild coordination tools
+            description: Shared fleet analytics, resource pools, and mission planning
+            estimated_days: 5
+            labels:
+              - "type: feature"
+          - name: Territory tracking and alerts
+            description: Monitor territorial changes and conflict zones
+            estimated_days: 2
+            labels:
+              - "type: feature"
+
+      - name: Social Trading Insights
+        description: Leaderboards, whale tracking, and community sentiment analysis
+        labels:
+          - "type: epic"
+          - "priority: low"
+        estimated_days: 10
+        features:
+          - name: Trading leaderboards
+            description: Track top traders, best strategies, and profit leaders
+            estimated_days: 3
+            labels:
+              - "type: feature"
+          - name: Whale activity monitoring
+            description: Track large transactions and wallet movements
+            estimated_days: 4
+            labels:
+              - "type: feature"
+          - name: Community sentiment analysis
+            description: Analyze Discord, Twitter, and forum sentiment for market insights
+            estimated_days: 3
+            labels:
+              - "type: feature"
+
+      - name: VR/AR Integration
+        description: Virtual reality star map and augmented reality mobile overlays
+        labels:
+          - "type: epic"
+          - "priority: low"
+        estimated_days: 25
+        features:
+          - name: VR star map navigation
+            description: WebXR integration for immersive star map exploration
+            estimated_days: 10
+            labels:
+              - "type: feature"
+          - name: AR mobile overlay
+            description: AR.js integration for mobile ship info overlays
+            estimated_days: 8
+            labels:
+              - "type: feature"
+          - name: Spatial audio for voice assistant
+            description: 3D positional audio for voice responses in VR/AR
+            estimated_days: 7
+            labels:
+              - "type: feature"
