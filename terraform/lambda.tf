@@ -38,6 +38,15 @@ module "agent_core_lambda" {
         "dynamodb:Scan"
       ]
       resources = ["*"]  # Will be scoped to specific tables after DynamoDB setup
+    },
+    {
+      effect = "Allow"
+      actions = [
+        "s3:PutObject",
+        "s3:PutObjectTagging",
+        "s3:GetObject"
+      ]
+      resources = ["${aws_s3_bucket.charts.arn}/*"]  # Charts bucket for visualizations
     }
   ]
 

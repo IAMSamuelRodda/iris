@@ -94,7 +94,42 @@ output "alerts_table_arn" {
   value       = module.alerts_table.table_arn
 }
 
+# Frontend Hosting Outputs
+
+output "web_app_bucket_id" {
+  description = "ID of the web app S3 bucket"
+  value       = module.web_app_hosting.bucket_id
+}
+
+output "web_app_bucket_arn" {
+  description = "ARN of the web app S3 bucket"
+  value       = module.web_app_hosting.bucket_arn
+}
+
+output "web_app_cloudfront_id" {
+  description = "ID of the web app CloudFront distribution"
+  value       = module.web_app_hosting.cloudfront_distribution_id
+}
+
+output "web_app_cloudfront_domain" {
+  description = "Domain name of the web app CloudFront distribution"
+  value       = module.web_app_hosting.cloudfront_domain_name
+}
+
+output "web_app_url" {
+  description = "URL to access the web application"
+  value       = module.web_app_hosting.website_url
+}
+
+output "charts_bucket_id" {
+  description = "ID of the charts S3 bucket (generated visualizations)"
+  value       = aws_s3_bucket.charts.id
+}
+
+output "charts_bucket_arn" {
+  description = "ARN of the charts S3 bucket"
+  value       = aws_s3_bucket.charts.arn
+}
+
 # Future outputs:
-# - S3 bucket names and ARNs
 # - API Gateway URLs
-# - CloudFront distribution domain
