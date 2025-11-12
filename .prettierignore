@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.turbo
+coverage
+*.log
+.terraform
+terraform.tfstate*
+.terraform.lock.hcl
+pnpm-lock.yaml
