@@ -1,0 +1,31 @@
+{
+  "name": "@star-atlas-agent/agent-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Agent SDK orchestrator for Star Atlas Agent",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "test": "vitest",
+    "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules .turbo lambda-placeholder"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.28.0",
+    "@aws-sdk/client-dynamodb": "^3.470.0",
+    "@aws-sdk/client-s3": "^3.470.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.470.0",
+    "@aws-sdk/lib-dynamodb": "^3.470.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
