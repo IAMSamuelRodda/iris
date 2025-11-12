@@ -52,7 +52,8 @@
   - EvEye Deep Dive: Comprehensive data platform, no public API, self-hosted wins (99.3% cheaper)
   - Historical Backfill Analysis: Live collection wins ($24 vs $124), 6 months sufficient for MVP
   - RPC Provider Analysis: Helius Developer tier selected ($49/month), 19 Star Atlas programs cataloged
-  - Star Frame Analysis: On-chain framework, not client-side; use @staratlas/sage SDK instead
+  - Star Frame Analysis: Critical for Phase 2+ (on-chain agent NFT ownership, dynamic memory)
+  - Portable Agent Architecture: NFT-based ownership model, users own personality (sell/transfer)
 
 **In Progress:**
 - Nothing currently active
@@ -60,7 +61,8 @@
 **Next Up:**
 - [ ] **Recommended**: Epic #1 - Foundation & Infrastructure (AWS setup, monorepo, CI/CD)
 - [ ] Alternative: Additional market research (user interviews, pricing validation)
-- [ ] **Research Complete**: 9 comprehensive documents created (60,000+ words total)
+- [ ] **Research Complete**: 10 comprehensive documents created (70,000+ words total)
+- [ ] **Phase 2 Planning**: Add "Agent NFT Ownership" epic to roadmap (Months 7-12)
 
 ---
 

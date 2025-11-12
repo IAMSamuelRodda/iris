@@ -843,23 +843,49 @@ ELSE
 | **When would Star Frame matter?** | If building custom programs | Evaluate in 12+ months |
 | **What's the alternative?** | Anchor | Default choice for custom programs |
 
-### 9.3 Final Recommendation
+### 9.3 Final Recommendation (Updated)
 
-**For Star Atlas Agent MVP**:
-- ✅ **Use @staratlas/sage SDK** (TypeScript client)
-- ✅ **Focus on client-side integration** (MCP tools, agent orchestration)
-- ❌ **Do NOT use Star Frame** (not relevant for client development)
+**CRITICAL UPDATE**: User vision revealed Star Frame is **HIGHLY RELEVANT** for future milestones.
 
-**For Future Custom Programs** (post-MVP):
-- ✅ **Consider Star Frame** IF (compute-critical OR dynamic data structures)
-- ✅ **Default to Anchor** (safer, mature ecosystem)
-- ✅ **Hire Rust expert** (custom programs require deep Solana knowledge)
+**User Vision**:
+> "I want to create a way for people to actually own the agent they create. Its experience matters. So, we should find a way to encode this experience, or seed it in the blockchain so that someone can 'sell' it or move it around to wherever they want."
+
+**This Changes Everything**:
+- **Phase 1 (MVP)**: Use @staratlas/sage SDK (client-side, no Star Frame needed)
+- **Phase 2 (Post-MVP)**: Build Star Frame program for on-chain agent personality storage
+- **Phase 3 (Decentralized)**: Open-source agent runtime, compete on infrastructure
+
+**Why Star Frame is ESSENTIAL for Phase 2+**:
+1. **Dynamic Memory**: Agent personality grows with experience (UnsizedVec, UnsizedMap)
+2. **NFT Ownership**: Users mint agent NFTs, personality data stored on-chain
+3. **Portability**: Agent runs on ANY infrastructure (ours, competitors, self-hosted)
+4. **Marketplace**: Users can sell experienced agents (personality = valuable asset)
+
+**Updated Recommendations**:
+
+**For MVP (Months 1-6)**:
+- ✅ **Use @staratlas/sage SDK** (client-side TypeScript)
+- ✅ **DynamoDB memory** (cloud storage, fast iteration)
+- ❌ **No Star Frame** (defer on-chain complexity)
+
+**For Phase 2 (Months 7-12)**:
+- ✅ **Build Star Frame program** (agent personality storage)
+- ✅ **Metaplex NFT integration** (mint agent NFTs)
+- ✅ **Magic Eden marketplace** (buy/sell experienced agents)
+- ✅ **Hire Rust expert** (critical for on-chain program development)
+
+**For Phase 3 (Months 13-24)**:
+- ✅ **Open-source agent runtime** (anyone can run agents)
+- ✅ **Compete on infrastructure** (premium features, best UX)
+- ✅ **Earn marketplace royalties** (5% of secondary sales)
 
 **Next Steps**:
-1. No immediate action required (Star Frame not needed for MVP)
-2. Bookmark Star Frame docs for future reference
-3. Monitor Star Frame development (community growth, tooling improvements)
-4. Revisit decision if building custom on-chain programs (12+ months)
+1. **MVP**: Build cloud-only version (validate product-market fit)
+2. **Research**: Study Star Frame unsized types (prepare for Phase 2)
+3. **Architecture**: Design on-chain agent personality schema
+4. **Planning**: Add "Agent NFT Ownership" epic to roadmap (Phase 2)
+
+**See**: `docs/research/portable-agent-ownership-architecture.md` for complete technical architecture.
 
 ---
 
