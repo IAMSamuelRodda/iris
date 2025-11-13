@@ -1,0 +1,98 @@
+name: Deploy to Staging
+
+# Deploy dev branch to staging environment (AWS)
+# Runs comprehensive E2E tests (Amazon-style: full validation in staging)
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+  id-token: write  # Required for AWS OIDC
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging
+      url: https://staging.staratlas-agent.com  # Update with actual URL
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Apply (Staging)
+        working-directory: terraform
+        run: |
+          terraform apply -auto-approve \
+            -var-file=environments/staging/terraform.tfvars \
+            -var="environment=staging"
+
+      - name: Run E2E tests against staging
+        run: pnpm test:e2e
+        env:
+          API_URL: ${{ secrets.STAGING_API_URL }}
+          TEST_WALLET: ${{ secrets.TEST_WALLET_STAGING }}
+
+      - name: Health check
+        run: |
+          for i in {1..5}; do
+            if curl -f ${{ secrets.STAGING_API_URL }}/health; then
+              echo "✓ Health check passed"
+              exit 0
+            fi
+            echo "Health check attempt $i failed, retrying..."
+            sleep 10
+          done
+          echo "✗ Health check failed after 5 attempts"
+          exit 1
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `🚨 Staging deployment failed for commit ${context.sha.substring(0, 7)}
+
+            **Branch:** ${context.ref}
+            **Workflow:** ${context.workflow}
+            **Run:** ${context.runNumber}
+
+            [View deployment logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+
+            // Could integrate with Slack/Discord here
+            console.log(message);

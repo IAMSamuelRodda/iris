@@ -27,7 +27,7 @@ See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete setup.
 - [ ] Tests passing
 - [ ] Docs updated
 - [ ] Issue linked (`Closes #N`)
-- [ ] PR approved ’ merged to dev
+- [ ] PR approved ï¿½ merged to dev
 
 ### Bug Fix
 - [ ] Root cause documented
@@ -48,7 +48,7 @@ See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete setup.
 
 **Tool**: GitHub Issues + Projects
 
-**Hierarchy**: Epic (Milestone) ’ Feature (Issue) ’ Task (Sub-issue)
+**Hierarchy**: Epic (Milestone) ï¿½ Feature (Issue) ï¿½ Task (Sub-issue)
 
 **Labels**:
 - Type: `epic`, `feature`, `task`, `bug`, `spike`
@@ -99,7 +99,7 @@ Closes #42"
 git push
 gh pr create --base dev --head feature/my-feature
 
-#   MUST target dev branch, NOT main
+# ï¿½ MUST target dev branch, NOT main
 ```
 
 ### Release to Production
@@ -117,13 +117,13 @@ gh pr create --base main --head dev --title "Release v0.2.0"
 **Strategy**: Three-tier with branch protection
 
 ```
-feature/* ’ dev (staging) ’ main (production)
+feature/* ï¿½ dev (staging) ï¿½ main (production)
 ```
 
 **Rules**:
-- Ô main ONLY accepts PRs from dev
-- Ô dev ONLY accepts PRs from feature/fix/spike branches
-- Ô No direct commits to dev or main
+- ï¿½ main ONLY accepts PRs from dev
+- ï¿½ dev ONLY accepts PRs from feature/fix/spike branches
+- ï¿½ No direct commits to dev or main
 
 See [`DEVELOPMENT.md`](./DEVELOPMENT.md) for complete workflow.
 
@@ -151,6 +151,36 @@ Closes #42
 
 ---
 
+## CI/CD Workflows
+
+**Automated workflows enforce code quality and deployment safety.**
+
+### Branch Protection
+- **enforce-main-pr-source.yml**: Blocks PRs to `main` unless from `dev`
+- Prevents accidental direct merges to production
+
+### Continuous Integration (on PRs to dev/main)
+- **ci.yml**: Runs lint, typecheck, format check, tests, and build
+- **security.yml**: Dependency audit, CodeQL analysis, secret scanning
+- **terraform.yml**: Infrastructure validation (only when terraform/ changes)
+
+### Auto-merge (feature â†’ dev)
+- **auto-merge-to-dev.yml**: Automatically merges feature/* and fix/* branches to dev after CI passes
+- Reduces manual PR merging overhead
+- Squash commits for clean history
+
+### Deployments
+- **deploy-staging.yml**: Deploys dev â†’ staging (comprehensive E2E tests)
+- **deploy-production.yml**: Deploys main â†’ production (smoke tests + auto-rollback)
+- **e2e-tests.yml**: Reusable E2E testing workflow
+
+### Deployment Strategy (Amazon-style)
+- **Staging**: Comprehensive E2E tests (full validation)
+- **Production**: Minimal smoke tests + health checks + CloudWatch monitoring
+- **Auto-rollback**: Production deployments roll back automatically if health checks fail
+
+---
+
 ## Best Practices
 
 1. Read `STATUS.md` before starting
@@ -159,7 +189,8 @@ Closes #42
 4. Link commits to issues
 5. Run pre-commit checklist (see DEVELOPMENT.md)
 6. Update docs with code
+7. Let CI/CD handle merges and deployments (automation reduces errors)
 
 ---
 
-**Last Updated**: 2025-11-12
+**Last Updated**: 2025-11-13
