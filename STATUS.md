@@ -3,8 +3,8 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-11-12
-**Current Phase**: Planning & Architecture Design
+**Last Updated**: 2025-11-13
+**Current Phase**: Active Development
 **Version**: 0.1.0 (Pre-MVP)
 
 ---
@@ -13,12 +13,13 @@
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| Planning | =5 | Vision alignment complete, blueprint pending |
-| Architecture Docs | =5 | CLAUDE.md, README.md complete; ARCHITECTURE.md pending |
-| Infrastructure | =4 | Not started - AWS setup pending |
-| CI/CD Pipeline | =4 | Not started |
-| Test Coverage | =4 | No code yet |
-| Known Bugs | =� | None (no code yet) |
+| Planning | =� | Blueprint complete, 133 issues created |
+| Architecture Docs | =� | All core docs complete (ARCHITECTURE.md, VISION.md, etc) |
+| Infrastructure | =� | Terraform, Lambda, DynamoDB, API Gateway, S3, CloudFront |
+| CI/CD Pipeline | =� | 5 workflows (auto-merge, staging/prod deploy, E2E, security) |
+| Auth Service | =� | Magic link + wallet auth + profiles complete |
+| Test Coverage | =� | Infrastructure in place, tests needed |
+| Known Bugs | =� | None yet |
 
 **Status Guide:** =� Good | =� Attention | =4 Critical | =5 In Progress
 
@@ -56,13 +57,25 @@
   - Portable Agent Architecture: NFT-based ownership model, users own personality (sell/transfer)
 
 **In Progress:**
-- Nothing currently active
+- 🔍 Investigating previous work after IDE crash
+- Determining next development phase (Memory Service, Agent Core, or MCP Server)
+
+**Recently Completed (2025-11-13):**
+- ✅ Epic #1 - Foundation & Infrastructure (Issues #1-15)
+  - Terraform AWS infrastructure
+  - CI/CD pipeline with 5 workflows
+  - Monorepo structure with pnpm workspaces
+- ✅ Epic #2 - Authentication System (Issues #16-24)
+  - Email magic link authentication
+  - Wallet signature challenge
+  - User profile management (DynamoDB)
+  - JWT utilities and auth middleware
+- ✅ Web app wallet connection components (partial)
 
 **Next Up:**
-- [ ] **Recommended**: Epic #1 - Foundation & Infrastructure (AWS setup, monorepo, CI/CD)
-- [ ] Alternative: Additional market research (user interviews, pricing validation)
-- [x] **Research Complete**: 10 comprehensive documents created (70,000+ words total)
-- [x] **Phase 2 Planning**: Agent NFT Ownership epic created (Issue #142, Months 7-12)
+- [ ] Add test coverage for auth-service
+- [ ] Choose next epic: Memory Service, Agent Core, or MCP Server
+- [ ] Continue web-app frontend development
 
 ---
 
@@ -91,9 +104,26 @@
 None
 
 ### High Priority
-None
+**Workflow Violation**: Recent commits (b347adb, 7c214a8, c90f3b1, a3e16ce, 96cab13) were made directly to `dev` instead of using feature branches and PRs. This violates CONTRIBUTING.md guidelines. All future work must follow the proper workflow:
+  1. Branch from dev
+  2. Make changes on feature branch
+  3. Create PR to dev
+  4. Merge after review
 
 ### Medium Priority
+**Auth Service Issues** (Post-implementation review 2025-11-13):
+1. **Missing Tests**: Zero test coverage (no .test.ts or .spec.ts files exist)
+2. **Data Model Issue**: Users table uses `email` as primary key, but wallet-only users get placeholder emails (`{wallet}@wallet.local`). This could cause:
+   - Collision if real user has that email domain
+   - Notification failures (not a real email)
+   - **Recommendation**: Migrate to `userId` as primary key
+3. **Security Gaps**:
+   - No rate limiting on magic link sends (spam/abuse risk)
+   - Email normalization inconsistent (lowercase in some places, not others)
+   - No input sanitization beyond basic validation
+4. **Missing Observability**: Only console.error logging, no structured logging or metrics
+
+### Low Priority
 None
 
 ---
