@@ -105,11 +105,10 @@ export async function verifyWalletSignature(
     let user: User;
 
     if (!userResult.Items || userResult.Items.length === 0) {
-      // Create new user with wallet
+      // Create new user with wallet (no email required)
       const userId = nanoid();
       user = {
         userId,
-        email: `${body.walletAddress}@wallet.local`, // Placeholder email
         walletAddress: body.walletAddress,
         createdAt: Date.now(),
         lastLoginAt: Date.now(),
@@ -128,7 +127,7 @@ export async function verifyWalletSignature(
       await ddb.send(
         new UpdateCommand({
           TableName: USERS_TABLE,
-          Key: { email: user.email },
+          Key: { userId: user.userId },
           UpdateExpression: 'SET lastLoginAt = :now',
           ExpressionAttributeValues: { ':now': Date.now() },
         })
@@ -138,7 +137,7 @@ export async function verifyWalletSignature(
     // Create JWT
     const jwtToken = createJWT({
       userId: user.userId,
-      email: user.email,
+      email: user.email || '', // Email may be undefined for wallet-only users
     });
 
     return {

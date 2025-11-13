@@ -3,6 +3,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { nanoid } from 'nanoid';
+import { rateLimitMiddleware } from '../middleware/rate-limit.js';
+import { logger } from '../utils/logger.js';
 import type { SendMagicLinkRequest, MagicLinkToken } from '../types.js';
 
 const ddbClient = new DynamoDBClient({});
@@ -18,6 +20,16 @@ export async function sendMagicLink(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
   try {
+    // Check rate limit first
+    const rateLimitResult = await rateLimitMiddleware(event, {
+      maxRequests: 3, // 3 requests per minute
+      windowSeconds: 60,
+    });
+
+    if (rateLimitResult) {
+      return rateLimitResult;
+    }
+
     const body: SendMagicLinkRequest = JSON.parse(event.body || '{}');
 
     if (!body.email) {
@@ -28,9 +40,12 @@ export async function sendMagicLink(
       };
     }
 
+    // Normalize email to lowercase
+    const normalizedEmail = body.email.toLowerCase().trim();
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
+    if (!emailRegex.test(normalizedEmail)) {
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -46,7 +61,7 @@ export async function sendMagicLink(
     // Store token in DynamoDB
     const tokenData: MagicLinkToken = {
       token,
-      email: body.email.toLowerCase(),
+      email: normalizedEmail,
       createdAt: now,
       expiresAt,
       used: false,
@@ -64,7 +79,7 @@ export async function sendMagicLink(
     const emailParams = {
       Source: FROM_EMAIL,
       Destination: {
-        ToAddresses: [body.email],
+        ToAddresses: [normalizedEmail],
       },
       Message: {
         Subject: {
@@ -89,16 +104,25 @@ export async function sendMagicLink(
 
     await ses.send(new SendEmailCommand(emailParams));
 
+    logger.info('Magic link sent successfully', {
+      email: normalizedEmail,
+      tokenExpiresIn: TOKEN_EXPIRY_MINUTES,
+    });
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: 'Magic link sent successfully',
-        email: body.email,
+        email: normalizedEmail,
       }),
     };
   } catch (error) {
-    console.error('Error sending magic link:', error);
+    logger.error(
+      'Failed to send magic link',
+      { email: (error as any).email },
+      error instanceof Error ? error : new Error(String(error))
+    );
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },

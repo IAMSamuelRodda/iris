@@ -15,7 +15,7 @@ export interface JWTPayload {
 
 export interface User {
   userId: string;
-  email: string;
+  email?: string; // Optional for wallet-only users
   createdAt: number;
   lastLoginAt: number;
   walletAddress?: string;

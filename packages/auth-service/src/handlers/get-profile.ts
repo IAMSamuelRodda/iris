@@ -21,11 +21,11 @@ export async function getProfile(
       };
     }
 
-    // Get user profile from DynamoDB
+    // Get user profile from DynamoDB using userId
     const result = await ddb.send(
       new GetCommand({
         TableName: USERS_TABLE,
-        Key: { email: event.auth.email },
+        Key: { userId: event.auth.userId },
       })
     );
 

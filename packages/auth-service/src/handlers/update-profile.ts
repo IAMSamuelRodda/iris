@@ -88,7 +88,7 @@ export async function updateProfile(
     await ddb.send(
       new UpdateCommand({
         TableName: USERS_TABLE,
-        Key: { email: event.auth.email },
+        Key: { userId: event.auth.userId },
         UpdateExpression: `SET ${updateExpressions.join(', ')}`,
         ExpressionAttributeValues: expressionAttributeValues,
         ...(Object.keys(expressionAttributeNames).length > 0 && {
@@ -101,7 +101,7 @@ export async function updateProfile(
     const result = await ddb.send(
       new GetCommand({
         TableName: USERS_TABLE,
-        Key: { email: event.auth.email },
+        Key: { userId: event.auth.userId },
       })
     );
 

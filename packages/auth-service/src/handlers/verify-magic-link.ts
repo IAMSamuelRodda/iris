@@ -1,8 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { nanoid } from 'nanoid';
 import { createJWT } from '../utils/jwt.js';
+import { logger } from '../utils/logger.js';
 import type { VerifyMagicLinkRequest, MagicLinkToken, User } from '../types.js';
 
 const ddbClient = new DynamoDBClient({});
@@ -72,20 +73,26 @@ export async function verifyMagicLink(
       })
     );
 
-    // Get or create user
+    // Get or create user - query by email using EmailIndex GSI
     const userResult = await ddb.send(
-      new GetCommand({
+      new QueryCommand({
         TableName: USERS_TABLE,
-        Key: { email: tokenData.email },
+        IndexName: 'EmailIndex',
+        KeyConditionExpression: 'email = :email',
+        ExpressionAttributeValues: {
+          ':email': tokenData.email,
+        },
+        Limit: 1,
       })
     );
 
-    let user = userResult.Item as User | undefined;
+    let user: User;
 
-    if (!user) {
+    if (!userResult.Items || userResult.Items.length === 0) {
       // Create new user
+      const userId = nanoid();
       user = {
-        userId: nanoid(),
+        userId,
         email: tokenData.email,
         createdAt: Date.now(),
         lastLoginAt: Date.now(),
@@ -98,11 +105,13 @@ export async function verifyMagicLink(
         })
       );
     } else {
+      user = userResult.Items[0] as User;
+
       // Update last login time
       await ddb.send(
         new UpdateCommand({
           TableName: USERS_TABLE,
-          Key: { email: tokenData.email },
+          Key: { userId: user.userId },
           UpdateExpression: 'SET lastLoginAt = :now',
           ExpressionAttributeValues: { ':now': Date.now() },
         })
@@ -113,6 +122,12 @@ export async function verifyMagicLink(
     const jwtToken = createJWT({
       userId: user.userId,
       email: user.email,
+    });
+
+    logger.info('Magic link verified successfully', {
+      userId: user.userId,
+      email: user.email,
+      isNewUser: !userResult.Items || userResult.Items.length === 0,
     });
 
     return {
@@ -127,7 +142,11 @@ export async function verifyMagicLink(
       }),
     };
   } catch (error) {
-    console.error('Error verifying magic link:', error);
+    logger.error(
+      'Failed to verify magic link',
+      {},
+      error instanceof Error ? error : new Error(String(error))
+    );
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
