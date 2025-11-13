@@ -38,6 +38,11 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "walletAddress"
+    type = "S"
+  }
+
   # GSI for looking up users by userId
   global_secondary_index {
     name            = "UserIdIndex"
@@ -45,8 +50,49 @@ resource "aws_dynamodb_table" "users" {
     projection_type = "ALL"
   }
 
+  # GSI for looking up users by wallet address
+  global_secondary_index {
+    name            = "WalletAddressIndex"
+    hash_key        = "walletAddress"
+    projection_type = "ALL"
+  }
+
   tags = merge(var.tags, {
     Name = "${var.project_name}-users-${var.environment}"
+  })
+}
+
+# DynamoDB Table: Wallet Challenges
+resource "aws_dynamodb_table" "wallet_challenges" {
+  name         = "${var.project_name}-challenges-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "challengeId"
+
+  attribute {
+    name = "challengeId"
+    type = "S"
+  }
+
+  attribute {
+    name = "walletAddress"
+    type = "S"
+  }
+
+  # GSI for looking up challenges by wallet address
+  global_secondary_index {
+    name            = "WalletAddressIndex"
+    hash_key        = "walletAddress"
+    projection_type = "ALL"
+  }
+
+  # TTL for automatic cleanup of expired challenges
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-challenges-${var.environment}"
   })
 }
 
@@ -64,11 +110,12 @@ module "auth_service_lambda" {
   source_dir = "${path.root}/../packages/auth-service/lambda-placeholder"
 
   environment_variables = {
-    TOKENS_TABLE  = aws_dynamodb_table.magic_link_tokens.name
-    USERS_TABLE   = aws_dynamodb_table.users.name
-    FRONTEND_URL  = var.environment == "prod" ? "https://staratlas-agent.com" : "http://localhost:5173"
-    FROM_EMAIL    = var.environment == "prod" ? "noreply@staratlas-agent.com" : "noreply@staratlas-agent.com"
-    JWT_SECRET    = var.jwt_secret
+    TOKENS_TABLE     = aws_dynamodb_table.magic_link_tokens.name
+    USERS_TABLE      = aws_dynamodb_table.users.name
+    CHALLENGES_TABLE = aws_dynamodb_table.wallet_challenges.name
+    FRONTEND_URL     = var.environment == "prod" ? "https://staratlas-agent.com" : "http://localhost:5173"
+    FROM_EMAIL       = var.environment == "prod" ? "noreply@staratlas-agent.com" : "noreply@staratlas-agent.com"
+    JWT_SECRET       = var.jwt_secret
   }
 
   tags = var.tags
@@ -93,7 +140,9 @@ resource "aws_iam_role_policy" "auth_lambda_dynamodb" {
         Resource = [
           aws_dynamodb_table.magic_link_tokens.arn,
           aws_dynamodb_table.users.arn,
-          "${aws_dynamodb_table.users.arn}/index/*"
+          "${aws_dynamodb_table.users.arn}/index/*",
+          aws_dynamodb_table.wallet_challenges.arn,
+          "${aws_dynamodb_table.wallet_challenges.arn}/index/*"
         ]
       }
     ]
@@ -147,6 +196,18 @@ resource "aws_apigatewayv2_route" "auth_send_magic_link" {
 resource "aws_apigatewayv2_route" "auth_verify_magic_link" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "POST /auth/verify"
+  target    = "integrations/${aws_apigatewayv2_integration.auth_service.id}"
+}
+
+resource "aws_apigatewayv2_route" "auth_wallet_challenge" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /auth/wallet/challenge"
+  target    = "integrations/${aws_apigatewayv2_integration.auth_service.id}"
+}
+
+resource "aws_apigatewayv2_route" "auth_wallet_verify" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /auth/wallet/verify"
   target    = "integrations/${aws_apigatewayv2_integration.auth_service.id}"
 }
 

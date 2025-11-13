@@ -9,15 +9,15 @@
 
 ## The Problem We See
 
-Star Atlas is a breathtaking game - a metaverse where players build empires among the stars. But here's the truth: **the game's complexity is both its greatest strength and its biggest barrier**.
+Star Atlas is a living game and set to be breathtaking one - a game where players build empires among the stars. But here's the truth: **the game's complexity is both its greatest strength and its biggest barrier**.
 
 Managing fleets across star systems. Optimizing resource production chains. Timing marketplace trades. Monitoring fuel levels across dozens of ships. **This isn't a game - it's a full-time job.**
 
-And when you step away? Your fleets run out of fuel. Your carefully planned routes fall apart. Your economic advantage evaporates. **The game punishes you for living your life.**
+And when you step away? Your fleets get stranded. Carefully planned routes fall apart. Pirates! **There is a punishing aspect to the game for people living a full life.**
 
 Existing tools don't solve this. EvEye gives you data visualization - beautiful charts that still require *you* to interpret, decide, and act. ATOM and SLY provide ship management interfaces - but you're still clicking through menus, running calculations, setting timers.
 
-**What's missing is a partner.** Someone (or something) that understands *your* strategy, learns *your* preferences, acts on *your* behalf - and gets better over time.
+**What's missing is a partner.** Someone (or something) that understands *your* strategy, learns *your* preferences, listens to *your* instructions and acts on them - and gets better over time.
 
 ---
 
@@ -58,7 +58,7 @@ Your agent? It remembers:
 
 This isn't programmed. **This is learned.** From your decisions. Your patterns. Your trust, earned over weeks and months.
 
-And here's what makes us radical: **Phase 2 puts that memory on-chain.**
+And here's what makes us radical: **that memory, that training, that personality, that seed of brilliance - you own that.**
 
 ### You Own Your Agent (Literally)
 
@@ -66,35 +66,35 @@ Here's where we break the SaaS mold entirely.
 
 **Phase 2**: You mint your agent as an NFT. Not a subscription you rent. An *asset you own*.
 
-Your agent's personality - its learned strategies, its understanding of your preferences, its trust progression from colleague to partner to friend - that's stored on-chain using Star Frame. **It's yours. Forever.**
+Your agent's personality - its learned strategies, its understanding of your preferences, its experiences with you - that's all ready to be stored and shared on-chain. **It's yours. Forever.**
 
 What does this mean?
 
-- **Portability**: Run your agent on our infrastructure, a competitor's platform, or self-hosted. Your choice. Your agent follows *you*.
-- **Value**: An agent that's managed fleets for 6 months, learned profitable strategies, and earned your trust? That's worth something. Sell it on Magic Eden. Transfer it to a guild member. It's *your* property.
-- **No Lock-In**: We compete on experience and performance, not by trapping your data. If we build the best infrastructure, you'll stay. If we don't, you can leave - and take your agent with you.
+- **Portability**: Run your agent on our infrastructure, take it over to another ecosystem, or self-hosted. Your choice. Your agent follows *you*.
+- **Value**: An agent that's managed fleets for 6 months, learned profitable strategies, and earned your trust? That's worth something. It's *your* decision what to do with it.
+- **No Traps**: We make it easy to take your progress with you should you leave us for any reason.
 
-This terrifies most SaaS companies. **We think it's the only honest way forward.**
+This terrifies most companies building software. **We believe its the right way forward.**
 
 ---
 
-## The Journey: From Tool to Trusted Partner
+## The Journey: From Trusted Tool to Partner Amongst The Stars
 
-### Month 1: Colleague
+### Month 1: Tool
 
 "Your Mining Fleet Alpha needs refueling in 2 hours."
 
 Useful. Factual. Transactional.
 
-### Month 3: Partner
+### Month 3: Helpful tool
 
 "Iron prices are up 15%, but you usually prefer guaranteed profit over speculation. Want me to calculate both scenarios?"
 
 Now it's learning your decision-making style. Adapting. Anticipating.
 
-### Month 6: Friend
+### Month 6: Helpful Partner
 
-"Hey - I know you've been stressed about ATLAS prices lately. Good news: your crafting operation just broke even for the week, and we're positioned well for the upcoming resource burn event. Want the details, or just trust me that we're on track?"
+"Hey - I know you've been stressed about ATLAS prices lately. Good news: your crafting operation just broke even for the week, and we're positioned well for the upcoming resource burn event. I've got the details handy if you want to look at them."
 
 **This is the vision.** An agent that doesn't just execute commands, but understands context, reads between the lines, and knows when you need reassurance vs. when you need data.
 
@@ -113,7 +113,7 @@ Star Atlas is launching major updates in late 2024 and 2025:
 
 The game is hitting critical mass. Players are already spending hours daily on fleet management. The pain is real, validated, and *expensive* in terms of player time.
 
-And here's the kicker: **No one else is building this.**
+And here's the kicker: **No one else is building this (yet).**
 
 - EvEye: Data platform (no AI, no voice, no personalization)
 - ATOM/SLY: Ship management (UI tools, not intelligent agents)
@@ -151,16 +151,11 @@ This won't be easy.
 
 Voice AI at scale is expensive. Memory compression is technically complex. On-chain personality storage using Star Frame requires Rust expertise we don't have yet (we'll hire in Month 6).
 
-We'll need to convince players to trust an AI with their fleets. We'll need to convince investors that giving away ownership (NFT model) is smarter than SaaS lock-in.
+We'll need to earn players trust to integrate AI with their fleets.
 
 **But here's what we know:**
 
-Star Atlas players are *already* begging for this. The subreddit is full of posts like:
-- *"I love this game but I can't play 8 hours a day"*
-- *"Woke up to my fleet stranded - is there an auto-refuel bot?"*
-- *"Spent 3 hours optimizing crafting routes. There has to be a better way."*
-
-The demand exists. The technology exists. The blockchain exists.
+The technology exists. The blockchain exists.
 
 **What's missing is the courage to build it the right way** - voice-first, memory-augmented, and truly user-owned.
 
@@ -191,7 +186,7 @@ Are they rented from BigTech? Or are they *ours*?
 
 If you're reading this, you're here early.
 
-Maybe you're a developer deciding whether to contribute. Maybe you're a player wondering if this is real. Maybe you're an investor evaluating whether this vision is credible.
+Maybe you're a developer deciding whether to contribute. Maybe you're a player wondering if this is real.
 
 Here's what we can promise:
 
@@ -209,7 +204,7 @@ What we *can't* promise:
 
 An AI partner that remembers. That learns. That you *own*.
 
-Because in a metaverse where you can own starships and space stations, **you should own your co-pilot too.**
+Because in a world where you can own starships and space stations, **you should own your Agent co-pilot too.**
 
 ---
 
