@@ -3,8 +3,8 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-02 (Memory Service complete)
-**Current Phase**: Implementation (Epic 2 complete, Epic 3 next)
+**Last Updated**: 2025-12-02 (Agent Core complete)
+**Current Phase**: Implementation (Epic 3 complete, voice service next)
 **Version**: 0.1.0 (Pre-MVP)
 
 ---
@@ -19,6 +19,7 @@
 | Monorepo Setup | Done | pnpm workspaces, 5 packages scaffolded |
 | MCP Server Foundation | Done | Feature 1.1 complete (lifecycle, tools, errors) |
 | **Memory Service** | **Done** | Epic 2 complete (knowledge graph, MCP tools, tests) |
+| **Agent Core** | **Done** | Epic 3 complete (Claude Agent SDK, IrisAgent class) |
 | CI/CD Pipeline | N/A | Main-only workflow; deploy via docker-compose |
 | Test Coverage | Partial | 12 tests for memory service |
 | Known Bugs | None | Early implementation |
@@ -29,6 +30,14 @@
 ## Current Focus
 
 **Completed (2025-12-02):**
+- **Agent Core (Epic 3) complete**:
+  - Claude Agent SDK integration (`@anthropic-ai/claude-agent-sdk`)
+  - In-process MCP server via `createSdkMcpServer()` (zero subprocess overhead)
+  - `IrisAgent` class with streaming `chat()` and `chatComplete()` methods
+  - IRIS system prompt with voice-optimized personality
+  - Dynamic user context injection from memory
+  - Session management via Agent SDK `resume` option
+  - Key decision: Agent-first architecture (not just chat API wrapper)
 - **Memory Service (Epic 2) complete**:
   - SQLite knowledge graph (entities, observations, relations)
   - MCP tools: 11 tools aligned with Anthropic memory server
@@ -65,11 +74,10 @@
   - BLOCKED: Waiting for Citadel REST API (Epic 2-3)
 
 **Next Up (MVP scope):**
-- [ ] **Agent Core (Epic 3)**: Claude Agent SDK integration, session management
 - [ ] **Voice Service (Epic 4)**: Chatterbox STT/TTS (needs spike first)
-- [ ] Web App (Epic 5): React + Vite frontend
-- [ ] CITADEL: REST API for blockchain/game data (Epic 2-3)
-- [ ] IRIS: Update MCP tools to wrap Citadel REST (Epic 8, blocked)
+- [ ] **Web App (Epic 5)**: React + Vite frontend with agent API
+- [ ] CITADEL: REST API for blockchain/game data (separate repo)
+- [ ] IRIS: Update MCP tools to wrap Citadel REST (blocked on CITADEL)
 
 **Deferred from MVP (2025-12-02):**
 - ⏸️ `prepareTransaction` tool - users execute via Star Atlas UI
@@ -128,10 +136,14 @@ None
    - SQLite knowledge graph with MCP tools
    - Pattern extracted to agentic-framework
 
-3. **Agent Core (Epic 3)** - Next
+3. ✅ **Agent Core** (Complete 2025-12-02)
    - Claude Agent SDK integration
-   - Session management
-   - System prompt + memory injection
+   - In-process MCP server with memory + Star Atlas tools
+   - IrisAgent class with streaming support
+
+4. **Voice Service (Epic 4)** - Next
+   - Needs spike: Chatterbox deployment patterns
+   - WebRTC signaling for real-time audio
 
 ---
 

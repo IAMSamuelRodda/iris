@@ -102,33 +102,44 @@
 
 ## Epic 3: Agent Core - Claude Agent SDK Orchestration
 
-**Estimated**: 15 days | **Status**: 🔴
+**Estimated**: 15 days | **Status**: 🟢
 
-### Feature 3.1: Agent SDK Integration (5 days)
+> **Foundation**: Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+> **Key Decision**: Agent-first architecture using battle-tested exploration/thinking patterns
+
+### Feature 3.1: Agent SDK Integration (5 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_3_1_1 | Initialize Agent SDK | 2.0 | 1d | 🔴 |
-| task_3_1_2 | Configure MCP server as tool provider | 2.8 | 2d | 🔴 |
-| task_3_1_3 | Implement conversation loop | 2.7 | 2d | 🔴 |
+| task_3_1_1 | Initialize Agent SDK | 2.0 | 1d | 🟢 |
+| task_3_1_2 | Configure MCP server as tool provider | 2.8 | 2d | 🟢 |
+| task_3_1_3 | Implement conversation loop | 2.7 | 2d | 🟢 |
 
-### Feature 3.2: Agent Personality & System Prompt (3 days)
+> **Implemented**: In-process MCP server via `createSdkMcpServer()`, `query()` wrapper with streaming
+
+### Feature 3.2: Agent Personality & System Prompt (3 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_3_2_1 | Write base system prompt | 1.5 | 1d | 🔴 |
-| task_3_2_2 | Implement dynamic prompt injection | 2.0 | 2d | 🔴 |
+| task_3_2_1 | Write base system prompt | 1.5 | 1d | 🟢 |
+| task_3_2_2 | Implement dynamic prompt injection | 2.0 | 2d | 🟢 |
 
-### Feature 3.3: Session Management (4 days)
+> **Implemented**: IRIS personality, voice-optimized responses, security rules, dynamic user context injection
+
+### Feature 3.3: Session Management (4 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_3_3_1 | Implement session creation | 2.0 | 1.5d | 🔴 |
-| task_3_3_2 | Add session state tracking | 2.2 | 1.5d | 🔴 |
-| task_3_3_3 | Implement session cleanup | 2.5 | 1d | 🔴 |
+| task_3_3_1 | Implement session creation | 2.0 | 1.5d | 🟢 |
+| task_3_3_2 | Add session state tracking | 2.2 | 1.5d | 🟢 |
+| task_3_3_3 | Implement session cleanup | 2.5 | 1d | 🟢 |
 
-### Feature 3.4: Agent API Endpoints (3 days)
+> **Implemented**: Agent SDK session management via `resume` option, conversation history via memory-service
+
+### Feature 3.4: Agent API Endpoints (3 days) 🟡
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_3_4_1 | Create /api/agent/message endpoint | 1.8 | 1.5d | 🔴 |
 | task_3_4_2 | Add streaming response support | 2.5 | 1.5d | 🔴 |
+
+> **Note**: API layer will be in web-app package, not agent-core. Agent-core provides `IrisAgent` class.
 
 ---
 

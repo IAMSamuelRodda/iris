@@ -9,7 +9,17 @@
  */
 
 export { KnowledgeGraphManager, type Entity, type Relation, type KnowledgeGraph } from "./knowledge-graph.js";
-export { initializeMemoryDb, getMemoryManager, closeMemoryDb } from "./database.js";
+export {
+  initializeMemoryDb,
+  getMemoryManager,
+  closeMemoryDb,
+  getDbInstance,
+  addConversationMessage,
+  getConversationHistory,
+  cleanupExpiredConversations,
+  clearConversationHistory,
+  type ConversationMessage,
+} from "./database.js";
 export { memoryToolDefinitions, executeMemoryTool } from "./mcp-tools.js";
 
 export const VERSION = "0.1.0";
