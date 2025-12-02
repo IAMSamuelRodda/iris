@@ -69,17 +69,18 @@ See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for complete details.
 
 ## Development
 
-**Git Workflow**: Worktrees for parallel agent work (NOT branch switching)
+**Workflow**: Simple tier (`main` only, direct pushes)
 
 ```bash
-# Create worktree for feature
-git worktree add ../iris--mcp-server feature/mcp-server
-cd ../iris--mcp-server
+# Create worktree for parallel work
+git worktree add ../iris--work main
+cd ../iris--work
 
-# Work in isolation, then PR to main
+# Work in isolation, push directly to main
+git push origin main
 ```
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for details.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for workflow details.
 
 ---
 
@@ -89,4 +90,4 @@ MIT
 
 ---
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-02

@@ -3,7 +3,7 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-02
 **Current Phase**: Planning & Architecture Refresh
 **Version**: 0.1.0 (Pre-MVP)
 
@@ -35,7 +35,6 @@
 
 **In Progress:**
 - Project documentation refresh
-- Simple git workflow setup
 
 **Next Up:**
 - [ ] Create GitHub issues for MVP implementation
@@ -82,11 +81,10 @@ None
 
 ## Next Steps (Priority Order)
 
-1. **Simple Git Workflow** (Worktree-based)
-   - **main** branch only in primary directory
-   - **Worktrees** for parallel development (NOT branch switching)
-   - GitHub Issues for task tracking
-   - No complex project boards
+1. ✅ **Simple Git Workflow** (Complete 2025-12-02)
+   - `main` only, no branch protection
+   - Worktrees for parallel agent work
+   - See `CONTRIBUTING.md` for workflow
 
 2. **Begin Implementation**
    - MCP server first (Solana + Star Atlas data access)
