@@ -313,6 +313,72 @@ IRIS Provides:
 
 ## Architectural Issues
 
+### ARCH-002: Voice Latency Exceeds Natural Conversation Threshold
+**Severity**: 🔴 Critical | **Created**: 2025-12-02 | **Updated**: 2025-12-02
+
+**Issue**: End-to-end voice latency is ~6.2 seconds, far exceeding the <500ms target for natural conversation.
+
+**Empirical Measurements** (2025-12-02, hybrid STT=CPU/TTS=CUDA):
+```
+Stage                           Mean        Min        Max        Std
+-----------------------------------------------------------------
+STT (faster-whisper CPU)      266.4ms     258.1ms     270.6ms       5.9ms
+Claude API (first token)     1975.2ms    1697.1ms    2450.1ms     337.4ms
+Claude API (total)           5030.5ms    4163.6ms    6589.4ms    1104.6ms
+TTS (Chatterbox GPU)          896.3ms     888.3ms     905.2ms       6.9ms
+-----------------------------------------------------------------
+TOTAL E2E                    6193.2ms    5329.3ms    7748.4ms    1101.9ms
+```
+
+**Latency Breakdown**:
+```
+  User stops speaking
+       ↓
+  STT Processing:      266.4ms (  4.3%)
+       ↓
+  Claude API:         5030.5ms ( 81.2%)  ← BOTTLENECK
+       ↓
+  TTS Synthesis:       896.3ms ( 14.5%)
+       ↓
+  First audio plays
+
+  TOTAL:              6193.2ms
+```
+
+**Root Cause Analysis**:
+1. **Claude API is the bottleneck** (81.2% of total latency)
+2. **Current architecture waits for full response** before starting TTS
+   - Location: `packages/web-app/src/components/Chat.tsx:118-125`
+   - TTS triggers on `type: "done"` event (full completion)
+   - Streaming tokens arrive but aren't used until stream ends
+
+**Optimization Options** (prioritized by impact):
+
+| Option | Effort | Impact | Description |
+|--------|--------|--------|-------------|
+| **1. Sentence-level TTS streaming** | High | ~50% reduction | Start TTS on first sentence, don't wait for full response |
+| **2. Use Claude Haiku for voice** | Low | ~40% reduction | Faster model for voice queries (Sonnet for complex tasks) |
+| **3. Speculative first response** | Medium | ~30% reduction | Pre-generate greeting while processing |
+| **4. Parallel STT during recording** | Low | ~5% reduction | Start transcription during silence gaps |
+
+**Implementation Plan**:
+```
+Phase 1 (Quick wins):
+- [ ] Switch to Claude Haiku for voice interactions
+- [ ] Measure new latency with benchmark
+
+Phase 2 (Streaming optimization):
+- [ ] Implement sentence boundary detection in Claude response stream
+- [ ] Start TTS on first sentence while Claude continues generating
+- [ ] Update WebSocket bridge to support interleaved text/audio
+```
+
+**Benchmark Script**: `packages/voice-backend/test_e2e_latency.py`
+
+**Status**: 🔴 Active issue - affects user experience
+
+---
+
 ### ARCH-001: IRIS/CITADEL Separation of Concerns
 **Severity**: 🔴 Critical | **Created**: 2025-12-02 | **Updated**: 2025-12-02
 

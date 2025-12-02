@@ -3,8 +3,8 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-02 (Concise responses, duplicate bug fixed, TTS loading)
-**Current Phase**: Implementation (Voice integration in progress)
+**Last Updated**: 2025-12-02 (Voice latency benchmarked - ARCH-002)
+**Current Phase**: Implementation (Voice latency optimization)
 **Version**: 0.1.0 (Pre-MVP)
 
 ---
@@ -83,14 +83,23 @@
 - Voice service updated to use Chatterbox (self-hosted STT/TTS)
 
 **In Progress:**
-- 🟢 **Voice Integration** (2025-12-02):
-  - ✅ STT (faster-whisper) - **WORKING** - transcribes voice to text
+- 🔴 **Voice Latency Optimization** (2025-12-02 - ARCH-002):
+  - ✅ Empirical benchmark created: `test_e2e_latency.py`
+  - ✅ Measured: E2E latency = 6.2s (target: <500ms)
+  - ✅ GPU TTS acceleration: Chatterbox on RTX 4090 (896ms, down from ~60s on CPU)
+  - ✅ Hybrid device config: STT=CPU (266ms), TTS=CUDA (896ms)
+  - ❌ Bottleneck: Claude API = 5030ms (81% of total)
+  - ❌ Architecture issue: TTS waits for full response
+  - **Next**: Implement sentence-level TTS streaming or switch to Haiku
+
+- 🟢 **Voice Integration** (Complete 2025-12-02):
+  - ✅ STT (faster-whisper) - **WORKING** - 266ms latency
   - ✅ WebSocket bridge - audio streaming from browser functional
   - ✅ Push-to-talk UI - recording and sending audio
-  - ✅ TTS (Chatterbox) - **WORKING** - synthesizes speech from text
+  - ✅ TTS (Chatterbox) - **WORKING** - 896ms on GPU (55x faster than CPU)
   - ✅ Response conciseness - max 2 sentences for TTS
-  - ✅ Duplicate response bug - fixed (skip assistant messages, use stream_event deltas)
-  - Note: Running locally (not Docker) with `CUDA_VISIBLE_DEVICES=""`
+  - ✅ Duplicate response bug - fixed
+  - Note: Hybrid mode (STT_DEVICE=cpu, TTS_DEVICE=cuda)
   - Note: Chatterbox model ~3GB cached in ~/.cache/huggingface/
 
 - 🟡 **Integration Testing** (2025-12-02):
@@ -133,7 +142,14 @@
 ## Known Issues
 
 ### Critical
-None
+
+**ARCH-002: Voice Latency ~6.2s (Target: <500ms)**
+- **Measured**: Total E2E = 6193ms average
+- **Breakdown**: STT 266ms (4%) + Claude API 5030ms (81%) + TTS 896ms (15%)
+- **Root cause**: TTS waits for full Claude response before starting
+- **Bottleneck**: Claude API (claude-sonnet-4-5) accounts for 81% of latency
+- **Benchmark script**: `packages/voice-backend/test_e2e_latency.py`
+- See `ISSUES.md#ARCH-002` for optimization options
 
 ### High Priority
 None
