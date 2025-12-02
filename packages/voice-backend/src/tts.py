@@ -28,8 +28,13 @@ class SynthesisResult:
     def to_wav_bytes(self) -> bytes:
         """Convert to WAV file bytes."""
         buffer = io.BytesIO()
+        # Ensure audio is 1D (mono) - squeeze out any extra dimensions
+        audio = self.audio.squeeze()
+        if audio.ndim > 1:
+            # If still multi-dimensional, take first channel
+            audio = audio[0] if audio.shape[0] < audio.shape[-1] else audio[:, 0]
         # Convert to int16 for WAV
-        audio_int16 = (self.audio * 32767).astype(np.int16)
+        audio_int16 = (audio * 32767).astype(np.int16)
         wavfile.write(buffer, self.sample_rate, audio_int16)
         return buffer.getvalue()
 
@@ -93,6 +98,7 @@ class TextToSpeech:
         exaggeration: float = 0.5,
         cfg_weight: float = 0.5,
         voice_reference: str | Path | None = None,
+        speech_rate: float = 1.0,
     ) -> SynthesisResult:
         """
         Synthesize speech from text.
@@ -103,6 +109,7 @@ class TextToSpeech:
             cfg_weight: Classifier-free guidance weight (0.0-1.0).
             voice_reference: Optional path to reference audio for voice cloning.
                             Overrides instance-level voice_reference.
+            speech_rate: Speech rate multiplier (0.5-2.0). >1.0 is faster, <1.0 is slower.
 
         Returns:
             SynthesisResult with audio samples and metadata.
@@ -154,6 +161,16 @@ class TextToSpeech:
         # Normalize if needed
         if audio.max() > 1.0 or audio.min() < -1.0:
             audio = audio / max(abs(audio.max()), abs(audio.min()))
+
+        # Apply speech rate adjustment via resampling
+        if speech_rate != 1.0 and 0.5 <= speech_rate <= 2.0:
+            from scipy import signal
+            # To speed up audio (rate > 1), we resample to fewer samples
+            # To slow down audio (rate < 1), we resample to more samples
+            original_len = len(audio)
+            target_len = int(original_len / speech_rate)
+            audio = signal.resample(audio, target_len).astype(np.float32)
+            logger.debug(f"Applied speech rate {speech_rate}: {original_len} -> {target_len} samples")
 
         duration = len(audio) / self._sample_rate
 

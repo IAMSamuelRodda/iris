@@ -188,19 +188,23 @@ export class VoiceWebSocketServer {
         console.log(`[VoiceWS] Synthesize (${session.id}): "${message.text.slice(0, 50)}..."`);
 
         try {
-          // Synthesize speech
-          const audioBuffer = await this.voiceClient.synthesize({
+          // Synthesize speech (returns WAV file bytes)
+          const wavBuffer = await this.voiceClient.synthesize({
             text: message.text,
             exaggeration: message.exaggeration ?? 0.5,
+            speech_rate: message.speechRate,
           });
+
+          // Strip 44-byte WAV header to get raw PCM data
+          const pcmData = wavBuffer.slice(44);
 
           // Send audio start
           this.send(ws, { type: "audio_start", sampleRate: 24000 });
 
-          // Send audio in chunks
+          // Send PCM audio in chunks
           const chunkSize = 8192;
-          for (let i = 0; i < audioBuffer.length; i += chunkSize) {
-            const chunk = audioBuffer.slice(i, i + chunkSize);
+          for (let i = 0; i < pcmData.length; i += chunkSize) {
+            const chunk = pcmData.slice(i, i + chunkSize);
             this.send(ws, {
               type: "audio_chunk",
               data: chunk.toString("base64"),
@@ -208,7 +212,7 @@ export class VoiceWebSocketServer {
           }
 
           // Send audio end
-          const durationSeconds = audioBuffer.length / (24000 * 2); // 16-bit samples
+          const durationSeconds = pcmData.length / (24000 * 2); // 16-bit samples
           this.send(ws, { type: "audio_end", durationSeconds });
 
           console.log(`[VoiceWS] Synthesis complete (${session.id}): ${durationSeconds.toFixed(2)}s`);

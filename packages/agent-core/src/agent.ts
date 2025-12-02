@@ -16,6 +16,13 @@ import {
 import { getMemoryManager, addConversationMessage } from "@iris/memory-service";
 import { buildSystemPrompt, generateUserContext } from "./system-prompt.js";
 import { createIrisMcpServer } from "./mcp-server.js";
+import { type VoiceStyleId, type VoiceStyle, getVoiceStyle } from "./voice-styles.js";
+import {
+  generateQuickAcknowledgment,
+  needsAcknowledgment,
+  getQuickFallback,
+  type QuickAcknowledgment,
+} from "./fast-layer.js";
 
 // ============================================================================
 // Types
@@ -28,6 +35,8 @@ export interface IrisAgentConfig {
   sessionId?: string;
   /** Model to use (default: claude-sonnet-4-5-20250929) */
   model?: string;
+  /** Voice style for conversation behavior (default: "normal") */
+  voiceStyle?: VoiceStyleId;
   /** Additional instructions to append to system prompt */
   additionalInstructions?: string;
   /** Abort controller for cancellation */
@@ -52,10 +61,12 @@ export interface AgentResponse {
 }
 
 export interface StreamChunk {
-  type: "text" | "tool_start" | "tool_end" | "system" | "error" | "done";
+  type: "text" | "tool_start" | "tool_end" | "system" | "error" | "done" | "acknowledgment";
   content: string;
   toolName?: string;
   sessionId?: string;
+  /** For acknowledgment chunks - whether main response follows */
+  isInterim?: boolean;
 }
 
 // ============================================================================
@@ -97,6 +108,20 @@ export class IrisAgent {
    * Yields chunks as they arrive for real-time display.
    */
   async *chat(message: string): AsyncGenerator<StreamChunk> {
+    const voiceStyleId = this.config.voiceStyle || "normal";
+
+    // Fast layer: Generate quick acknowledgment if needed
+    if (needsAcknowledgment(message, voiceStyleId)) {
+      const acknowledgment = await this.getAcknowledgment(message);
+      if (acknowledgment) {
+        yield {
+          type: "acknowledgment",
+          content: acknowledgment.text,
+          isInterim: acknowledgment.needsFollowUp,
+        };
+      }
+    }
+
     const systemPrompt = await this.buildPromptWithContext();
 
     // Record user message in conversation history
@@ -225,6 +250,34 @@ export class IrisAgent {
     return buildSystemPrompt({
       userContext,
       additionalInstructions: this.config.additionalInstructions,
+      voiceStyle: this.config.voiceStyle,
+    });
+  }
+
+  /**
+   * Get the voice style configuration (for TTS parameters).
+   */
+  getVoiceStyle(): VoiceStyle {
+    return getVoiceStyle(this.config.voiceStyle || "normal");
+  }
+
+  /**
+   * Get a quick acknowledgment for the user message.
+   * Tries pattern-based fallback first, then Haiku for dynamic responses.
+   */
+  private async getAcknowledgment(message: string): Promise<QuickAcknowledgment | null> {
+    const voiceStyleId = this.config.voiceStyle || "normal";
+
+    // Try quick fallback first (instant, no API call)
+    const fallback = getQuickFallback(message, voiceStyleId);
+    if (fallback) {
+      return fallback;
+    }
+
+    // Use Haiku for dynamic acknowledgment
+    return generateQuickAcknowledgment(message, {
+      voiceStyle: voiceStyleId,
+      userId: this.config.userId,
     });
   }
 

@@ -34,18 +34,23 @@ logger = logging.getLogger(__name__)
 import os
 
 STT_MODEL_SIZE: ModelSize = os.getenv("STT_MODEL_SIZE", "base")  # type: ignore
-DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("VOICE_DEVICE", "auto")  # type: ignore
+# Separate devices for STT and TTS to avoid cuDNN issues with faster-whisper
+# STT uses CPU (int8 is already fast, ~1-2s for short utterances)
+# TTS uses CUDA (Chatterbox with PyTorch works fine with GPU)
+STT_DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("STT_DEVICE", "cpu")  # type: ignore
+TTS_DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("TTS_DEVICE", "cuda")  # type: ignore
 PRELOAD_MODELS = os.getenv("PRELOAD_MODELS", "false").lower() == "true"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - preload models if configured."""
+    logger.info(f"Voice backend starting: STT={STT_DEVICE}, TTS={TTS_DEVICE}")
     if PRELOAD_MODELS:
         logger.info("Preloading voice models...")
         # Access models to trigger lazy loading
-        _ = get_stt(STT_MODEL_SIZE).model
-        _ = get_tts(DEVICE).model
+        _ = get_stt(STT_MODEL_SIZE, STT_DEVICE).model
+        _ = get_tts(TTS_DEVICE).model
         logger.info("Voice models preloaded successfully")
     yield
     logger.info("Shutting down voice backend")
@@ -88,6 +93,7 @@ class SynthesizeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     exaggeration: float = Field(default=0.5, ge=0.0, le=1.0)
     cfg_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    speech_rate: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
 class HealthResponse(BaseModel):
@@ -107,14 +113,14 @@ class HealthResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Check service health and model status."""
-    stt = get_stt(STT_MODEL_SIZE)
-    tts = get_tts(DEVICE)
+    stt = get_stt(STT_MODEL_SIZE, STT_DEVICE)
+    tts = get_tts(TTS_DEVICE)
 
     return HealthResponse(
         status="ok",
         stt_loaded=stt._model is not None,
         tts_loaded=tts._model is not None,
-        device=DEVICE,
+        device=f"stt={STT_DEVICE}, tts={TTS_DEVICE}",
     )
 
 
@@ -162,7 +168,7 @@ async def transcribe_audio(
             )
 
         # Transcribe
-        stt = get_stt(STT_MODEL_SIZE)
+        stt = get_stt(STT_MODEL_SIZE, STT_DEVICE)
         result = stt.transcribe(audio_data, language=language)
 
         return TranscribeResponse(
@@ -187,11 +193,12 @@ async def synthesize_speech(request: SynthesizeRequest):
     Returns WAV audio file.
     """
     try:
-        tts = get_tts(DEVICE)
+        tts = get_tts(TTS_DEVICE)
         result = tts.synthesize(
             text=request.text,
             exaggeration=request.exaggeration,
             cfg_weight=request.cfg_weight,
+            speech_rate=request.speech_rate,
         )
 
         # Return as WAV
@@ -220,7 +227,7 @@ async def synthesize_speech_streaming(request: SynthesizeRequest):
     Client should buffer and play as received.
     """
     try:
-        tts = get_tts(DEVICE)
+        tts = get_tts(TTS_DEVICE)
 
         def generate():
             for chunk in tts.synthesize_streaming(request.text):

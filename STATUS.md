@@ -3,8 +3,8 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-02 (Voice latency benchmarked - ARCH-002)
-**Current Phase**: Implementation (Voice latency optimization)
+**Last Updated**: 2025-12-03 (Voice acknowledgments tested + threshold fix)
+**Current Phase**: Implementation (Voice UX improvements)
 **Version**: 0.1.0 (Pre-MVP)
 
 ---
@@ -82,15 +82,37 @@
 - Memory architecture simplified to SQLite (pip-by-arc-forge pattern)
 - Voice service updated to use Chatterbox (self-hosted STT/TTS)
 
+**Completed (2025-12-03):**
+- **Voice Styles System** (UX Enhancement):
+  - 5 voice styles: Normal, Formal, Concise, Immersive, Learning
+  - Voice style selector in web-app UI (persists to localStorage)
+  - Style-specific system prompt injection via `buildVoiceStylePrompt()`
+  - TTS parameters: `speechRate`, `exaggeration` per style
+  - Thinking feedback control: "none", "minimal", "verbose"
+- **Fast Layer (Haiku 4.5)** - Quick acknowledgments:
+  - Uses Claude Agent SDK `query()` for consistency with main agent
+  - Model: `claude-haiku-4-5-20251001` for <200ms acknowledgments
+  - Pattern-based fallbacks for common requests (fleet, wallet, help)
+  - Acknowledgment streaming via SSE `acknowledgment` chunk type
+  - Respects voice style `thinkingFeedback` setting
+- **Fast Layer Testing** (End-to-end verified):
+  - Fixed `needsAcknowledgment()` threshold: 20 chars → 5 chars
+  - Acknowledgments now trigger for typical voice input
+  - Voice-only feedback (no text shown) - intentional for speed
+  - Measured warm TTS: 2-3s for acknowledgment synthesis
+  - Known issue: TTS cold start ~16s (Chatterbox model load)
+  - Known issue: Audio overlap (ack + response play together)
+
 **In Progress:**
-- 🔴 **Voice Latency Optimization** (2025-12-02 - ARCH-002):
+- 🟢 **Voice Latency Optimization** (2025-12-03 - ARCH-002):
   - ✅ Empirical benchmark created: `test_e2e_latency.py`
   - ✅ Measured: E2E latency = 6.2s (target: <500ms)
   - ✅ GPU TTS acceleration: Chatterbox on RTX 4090 (896ms, down from ~60s on CPU)
   - ✅ Hybrid device config: STT=CPU (266ms), TTS=CUDA (896ms)
-  - ❌ Bottleneck: Claude API = 5030ms (81% of total)
-  - ❌ Architecture issue: TTS waits for full response
-  - **Next**: Implement sentence-level TTS streaming or switch to Haiku
+  - ✅ Fast Layer: Haiku 4.5 for quick acknowledgments while Sonnet processes
+  - ✅ Fast Layer tested: acknowledgments working via voice (2-3s TTS)
+  - ❌ Bottleneck: Claude API (Sonnet) = 5030ms (81% of total)
+  - **Next**: Audio queue (prevent ack + response overlap), TTS pre-warming
 
 - 🟢 **Voice Integration** (Complete 2025-12-02):
   - ✅ STT (faster-whisper) - **WORKING** - 266ms latency
@@ -118,7 +140,9 @@
 **Next Up (MVP scope):**
 - [x] **Voice conciseness**: IRIS responses max 2 sentences for TTS
 - [x] **TTS testing**: Chatterbox voice synthesis working
-- [ ] **End-to-end voice testing**: Test full voice conversation loop
+- [x] **End-to-end voice testing**: Full voice loop tested (ack + response)
+- [ ] **Audio queue**: Fix playback overlap (ack plays over response)
+- [ ] **TTS pre-warming**: Load model on startup to avoid cold start
 - [ ] CITADEL: REST API for blockchain/game data (separate repo)
 
 **Deferred from MVP (2025-12-02):**
@@ -143,23 +167,42 @@
 
 ### Critical
 
-**ARCH-002: Voice Latency ~6.2s (Target: <500ms)**
-- **Measured**: Total E2E = 6193ms average
-- **Breakdown**: STT 266ms (4%) + Claude API 5030ms (81%) + TTS 896ms (15%)
-- **Root cause**: TTS waits for full Claude response before starting
-- **Bottleneck**: Claude API (claude-sonnet-4-5) accounts for 81% of latency
-- **Benchmark script**: `packages/voice-backend/test_e2e_latency.py`
-- See `ISSUES.md#ARCH-002` for optimization options
+**ARCH-002: Voice Latency Optimization** ✅ RESOLVED
+- **Fast-Layer Benchmark** (v2): `packages/voice-backend/test_e2e_latency_v2.py`
+- **Measured Fast Path** (GPU TTS, warm):
+  - STT: 526ms + Haiku: 4ms + TTS: 520ms = **~1.05s to first audio** ✅
+- **Haiku 4.5 acknowledgment**: 4ms (extremely fast!)
+- **GPU TTS**: 520ms (vs 13s on CPU - 25x improvement)
+- **Claude Sonnet**: 4.7s first token, 8.4s total (remaining bottleneck)
+- **Run services**: `STT_DEVICE=cpu TTS_DEVICE=cuda`
+- **Run benchmark**: `python test_e2e_latency_v2.py --compare-styles`
 
 ### High Priority
 None
 
 ### Medium Priority
-None
+
+**Audio Playback Overlap** (2025-12-03)
+- Acknowledgment and response TTS play simultaneously
+- Frontend needs audio queue to play in sequence
+- File: `packages/web-app/src/api/voice.ts`
+
+**TTS Cold Start** (2025-12-03)
+- First TTS request takes ~16s (Chatterbox model loading)
+- Subsequent requests ~2-3s
+- Consider pre-warming model on server startup
 
 ---
 
 ## Recent Achievements (Last 2 Weeks)
+
+**Voice UX Enhancement (2025-12-03)**
+- Voice Styles: 5 distinct conversation modes (Normal, Formal, Concise, Immersive, Learning)
+- Fast Layer: Haiku 4.5 acknowledgments using Agent SDK `query()` function (4ms!)
+- GPU TTS: 520ms acknowledgment synthesis (25x faster than CPU)
+- **Time to first audio: ~1.05s** (with fast-layer acknowledgment)
+- UI: Voice style selector with persistent preferences
+- Architecture: Consistent Agent SDK usage across both layers (Haiku + Sonnet)
 
 **Architecture Refresh (2025-12-01)**
 - Migrated from AWS to Digital Ocean VPS (cost-predictable)

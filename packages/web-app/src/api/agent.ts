@@ -14,10 +14,12 @@ export interface ChatMessage {
 }
 
 export interface StreamChunk {
-  type: "text" | "tool_start" | "tool_end" | "system" | "error" | "done";
+  type: "text" | "tool_start" | "tool_end" | "system" | "error" | "done" | "acknowledgment";
   content: string;
   toolName?: string;
   sessionId?: string;
+  /** For acknowledgment chunks - whether main response follows */
+  isInterim?: boolean;
 }
 
 export interface ChatResponse {
@@ -29,20 +31,45 @@ export interface ChatResponse {
 
 const API_BASE = import.meta.env.VITE_AGENT_API_URL || "http://localhost:3001";
 
+export type VoiceStyleId = "normal" | "formal" | "concise" | "immersive" | "learning";
+
+export interface VoiceStyleOption {
+  id: VoiceStyleId;
+  name: string;
+  description: string;
+  voiceProperties: {
+    speechRate: number;
+    exaggeration: number;
+  };
+}
+
+/**
+ * Fetch available voice styles.
+ */
+export async function getVoiceStyles(): Promise<VoiceStyleOption[]> {
+  const response = await fetch(`${API_BASE}/api/styles`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch styles: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data.styles;
+}
+
 /**
  * Send a chat message and stream the response.
  */
 export async function* streamChat(
   userId: string,
   message: string,
-  sessionId?: string
+  sessionId?: string,
+  voiceStyle?: VoiceStyleId
 ): AsyncGenerator<StreamChunk> {
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ userId, message, sessionId }),
+    body: JSON.stringify({ userId, message, sessionId, voiceStyle }),
   });
 
   if (!response.ok) {
@@ -90,14 +117,15 @@ export async function* streamChat(
 export async function sendChat(
   userId: string,
   message: string,
-  sessionId?: string
+  sessionId?: string,
+  voiceStyle?: VoiceStyleId
 ): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE}/api/chat/complete`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ userId, message, sessionId }),
+    body: JSON.stringify({ userId, message, sessionId, voiceStyle }),
   });
 
   if (!response.ok) {

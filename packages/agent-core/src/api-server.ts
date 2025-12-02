@@ -18,6 +18,7 @@ import { streamSSE } from "hono/streaming";
 import { serve } from "@hono/node-server";
 import { z } from "zod";
 import { createAgent, type IrisAgentConfig } from "./agent.js";
+import { getVoiceStyleOptions, isValidVoiceStyleId } from "./voice-styles.js";
 
 // ============================================================================
 // Request/Response Schemas
@@ -27,6 +28,7 @@ const ChatRequestSchema = z.object({
   userId: z.string().min(1),
   message: z.string().min(1),
   sessionId: z.string().optional(),
+  voiceStyle: z.string().optional(),
 });
 
 
@@ -80,6 +82,16 @@ export function createApiServer(config: Partial<ApiServerConfig> = {}) {
   });
 
   // =========================================================================
+  // Voice Styles Endpoint
+  // =========================================================================
+
+  app.get("/api/styles", (c) => {
+    return c.json({
+      styles: getVoiceStyleOptions(),
+    });
+  });
+
+  // =========================================================================
   // Chat Endpoint (Streaming via SSE)
   // =========================================================================
 
@@ -97,12 +109,16 @@ export function createApiServer(config: Partial<ApiServerConfig> = {}) {
       );
     }
 
-    const { userId, message, sessionId } = parseResult.data;
+    const { userId, message, sessionId, voiceStyle } = parseResult.data;
 
-    // Create agent with optional session resume
+    // Validate voiceStyle if provided
+    const validatedStyle = voiceStyle && isValidVoiceStyleId(voiceStyle) ? voiceStyle : undefined;
+
+    // Create agent with optional session resume and voice style
     const agentConfig: IrisAgentConfig = {
       userId,
       sessionId,
+      voiceStyle: validatedStyle,
     };
 
     const agent = createAgent(agentConfig);

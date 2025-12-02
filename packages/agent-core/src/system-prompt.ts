@@ -5,6 +5,8 @@
  * Your guy in the chair for Star Atlas commanders.
  */
 
+import { buildVoiceStylePrompt, type VoiceStyleId } from "./voice-styles.js";
+
 /**
  * Base system prompt for IRIS.
  * Can be extended with dynamic context (user memory, session state).
@@ -85,8 +87,18 @@ export function buildSystemPrompt(options: {
   userContext?: string;
   sessionContext?: string;
   additionalInstructions?: string;
+  /** Voice style to apply (default: "normal") */
+  voiceStyle?: VoiceStyleId;
 }): string {
   const parts = [IRIS_BASE_PROMPT];
+
+  // Inject voice style prompt modifier (replaces/extends base voice guidelines)
+  if (options.voiceStyle) {
+    const stylePrompt = buildVoiceStylePrompt(options.voiceStyle);
+    if (stylePrompt) {
+      parts.push(stylePrompt);
+    }
+  }
 
   if (options.userContext) {
     parts.push(`\n## User Context\n\n${options.userContext}`);

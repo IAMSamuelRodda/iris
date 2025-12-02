@@ -15,7 +15,7 @@ export type ClientMessage =
   | { type: "audio_start"; sampleRate: number; channels: number }
   | { type: "audio_chunk"; data: string } // Base64 encoded audio
   | { type: "audio_end" }
-  | { type: "synthesize"; text: string; exaggeration?: number }
+  | { type: "synthesize"; text: string; exaggeration?: number; speechRate?: number }
   | { type: "ping" };
 
 /**
@@ -51,6 +51,7 @@ export interface SynthesizeRequest {
   text: string;
   exaggeration?: number;
   cfg_weight?: number;
+  speech_rate?: number;
 }
 
 /**

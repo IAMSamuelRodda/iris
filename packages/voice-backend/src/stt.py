@@ -168,9 +168,12 @@ class SpeechToText:
 _stt_instance: SpeechToText | None = None
 
 
-def get_stt(model_size: ModelSize = "base") -> SpeechToText:
+def get_stt(
+    model_size: ModelSize = "base",
+    device: Literal["cpu", "cuda", "auto"] = "cpu",
+) -> SpeechToText:
     """Get or create the singleton STT instance."""
     global _stt_instance
     if _stt_instance is None:
-        _stt_instance = SpeechToText(model_size=model_size)
+        _stt_instance = SpeechToText(model_size=model_size, device=device)
     return _stt_instance

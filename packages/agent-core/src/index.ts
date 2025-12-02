@@ -22,4 +22,24 @@ export { createIrisMcpServer } from "./mcp-server.js";
 // API Server
 export { createApiServer, type ApiServerConfig } from "./api-server.js";
 
+// Voice Styles
+export {
+  type VoiceStyleId,
+  type VoiceStyle,
+  voiceStyles,
+  getVoiceStyle,
+  buildVoiceStylePrompt,
+  getVoiceStyleOptions,
+  isValidVoiceStyleId,
+} from "./voice-styles.js";
+
+// Fast Layer (Quick Acknowledgments)
+export {
+  generateQuickAcknowledgment,
+  needsAcknowledgment,
+  getQuickFallback,
+  type QuickAcknowledgment,
+  type FastLayerConfig,
+} from "./fast-layer.js";
+
 export const VERSION = "0.1.0";

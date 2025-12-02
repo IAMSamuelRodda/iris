@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Message, TypingIndicator } from "./Message";
-import { streamChat, type ChatMessage } from "../api/agent";
+import { streamChat, getVoiceStyles, type ChatMessage, type VoiceStyleId, type VoiceStyleOption } from "../api/agent";
 import { VoiceClient, type VoiceState } from "../api/voice";
 
 // Generate a simple user ID (in production, use auth)
@@ -19,6 +19,15 @@ const getUserId = () => {
   return userId;
 };
 
+// Get/set voice style preference
+const getVoiceStylePreference = (): VoiceStyleId => {
+  return (localStorage.getItem("iris-voice-style") as VoiceStyleId) || "normal";
+};
+
+const setVoiceStylePreference = (style: VoiceStyleId) => {
+  localStorage.setItem("iris-voice-style", style);
+};
+
 export function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -26,11 +35,28 @@ export function Chat() {
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [currentTool, setCurrentTool] = useState<string | null>(null);
+  const [voiceStyle, setVoiceStyle] = useState<VoiceStyleId>(getVoiceStylePreference);
+  const [availableStyles, setAvailableStyles] = useState<VoiceStyleOption[]>([]);
+  const [showStyleDropdown, setShowStyleDropdown] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const voiceClientRef = useRef<VoiceClient | null>(null);
   const userId = useRef(getUserId());
+
+  // Load available voice styles
+  useEffect(() => {
+    getVoiceStyles()
+      .then(setAvailableStyles)
+      .catch((err) => console.error("[Chat] Failed to load voice styles:", err));
+  }, []);
+
+  // Handle voice style change
+  const handleStyleChange = (styleId: VoiceStyleId) => {
+    setVoiceStyle(styleId);
+    setVoiceStylePreference(styleId);
+    setShowStyleDropdown(false);
+  };
 
   // Initialize voice client
   useEffect(() => {
@@ -80,9 +106,36 @@ export function Chat() {
       let assistantContent = "";
 
       try {
-        for await (const chunk of streamChat(userId.current, messageText, sessionId)) {
+        for await (const chunk of streamChat(userId.current, messageText, sessionId, voiceStyle)) {
           switch (chunk.type) {
+            case "acknowledgment":
+              // Quick acknowledgment for voice feedback
+              // In voice mode, speak immediately; in text mode, show briefly
+              if (text && voiceClientRef.current?.isConnected()) {
+                const styleProps = availableStyles.find((s) => s.id === voiceStyle)?.voiceProperties;
+                voiceClientRef.current.synthesize(
+                  chunk.content,
+                  styleProps?.exaggeration ?? 0.5,
+                  styleProps?.speechRate ?? 1.0
+                );
+              }
+              // Show acknowledgment in chat (will be replaced by full response)
+              if (chunk.isInterim) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `${assistantId}-ack`,
+                    role: "assistant",
+                    content: chunk.content,
+                    timestamp: Date.now(),
+                  },
+                ]);
+              }
+              break;
+
             case "text":
+              // Remove acknowledgment message when real content arrives
+              setMessages((prev) => prev.filter((m) => m.id !== `${assistantId}-ack`));
               assistantContent += chunk.content;
               setMessages((prev) => {
                 const existing = prev.find((m) => m.id === assistantId);
@@ -119,9 +172,14 @@ export function Chat() {
               if (chunk.sessionId) {
                 setSessionId(chunk.sessionId);
               }
-              // Trigger TTS for voice responses
+              // Trigger TTS for voice responses with voice style properties
               if (text && assistantContent && voiceClientRef.current?.isConnected()) {
-                voiceClientRef.current.synthesize(assistantContent);
+                const styleProps = availableStyles.find((s) => s.id === voiceStyle)?.voiceProperties;
+                voiceClientRef.current.synthesize(
+                  assistantContent,
+                  styleProps?.exaggeration ?? 0.5,
+                  styleProps?.speechRate ?? 1.0
+                );
               }
               break;
 
@@ -155,7 +213,7 @@ export function Chat() {
         setCurrentTool(null);
       }
     },
-    [input, isStreaming, sessionId]
+    [input, isStreaming, sessionId, voiceStyle]
   );
 
   // Handle key press
@@ -237,6 +295,64 @@ export function Chat() {
       </div>
 
       <div className="input-area">
+        {/* Voice Style Selector */}
+        <div className="style-selector" style={{ position: "relative" }}>
+          <button
+            className="btn btn-secondary style-btn"
+            onClick={() => setShowStyleDropdown(!showStyleDropdown)}
+            title={`Voice Style: ${availableStyles.find((s) => s.id === voiceStyle)?.name || voiceStyle}`}
+            style={{
+              padding: "8px 12px",
+              fontSize: "12px",
+              minWidth: "auto",
+              background: "var(--bg-tertiary)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "8px",
+              cursor: "pointer",
+            }}
+          >
+            {availableStyles.find((s) => s.id === voiceStyle)?.name || voiceStyle}
+          </button>
+          {showStyleDropdown && availableStyles.length > 0 && (
+            <div
+              className="style-dropdown"
+              style={{
+                position: "absolute",
+                bottom: "100%",
+                left: 0,
+                marginBottom: "8px",
+                background: "var(--bg-secondary)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                minWidth: "180px",
+                zIndex: 100,
+              }}
+            >
+              {availableStyles.map((style) => (
+                <button
+                  key={style.id}
+                  onClick={() => handleStyleChange(style.id)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "10px 14px",
+                    textAlign: "left",
+                    background: style.id === voiceStyle ? "var(--primary-color)" : "transparent",
+                    border: "none",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                    borderRadius: style.id === availableStyles[0]?.id ? "8px 8px 0 0" : style.id === availableStyles[availableStyles.length - 1]?.id ? "0 0 8px 8px" : "0",
+                  }}
+                >
+                  <div style={{ fontWeight: 500 }}>{style.name}</div>
+                  <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}>{style.description}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <textarea
           ref={inputRef}
           className="chat-input"

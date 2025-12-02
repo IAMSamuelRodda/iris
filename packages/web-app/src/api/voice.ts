@@ -21,6 +21,8 @@ export class VoiceClient {
   private ws: WebSocket | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private audioContext: AudioContext | null = null;
+  private playbackContext: AudioContext | null = null;
+  private nextPlayTime = 0; // For scheduling audio chunks sequentially
   private state: VoiceState = "idle";
   private options: VoiceClientOptions;
 
@@ -162,11 +164,12 @@ export class VoiceClient {
   /**
    * Request speech synthesis.
    */
-  synthesize(text: string, exaggeration = 0.5): void {
+  synthesize(text: string, exaggeration = 0.5, speechRate = 1.0): void {
     this.send({
       type: "synthesize",
       text,
       exaggeration,
+      speechRate,
     });
     this.setState("speaking");
   }
@@ -211,6 +214,8 @@ export class VoiceClient {
 
       case "audio_start":
         this.setState("speaking");
+        // Reset playback scheduling for new audio stream
+        this.nextPlayTime = 0;
         break;
 
       case "audio_chunk":
@@ -257,8 +262,11 @@ export class VoiceClient {
   }
 
   private playAudioChunk(base64Data: string, sampleRate = 24000): void {
-    if (!this.audioContext) {
-      this.audioContext = new AudioContext({ sampleRate });
+    // Use separate playback context at correct sample rate
+    if (!this.playbackContext || this.playbackContext.sampleRate !== sampleRate) {
+      this.playbackContext?.close();
+      this.playbackContext = new AudioContext({ sampleRate });
+      this.nextPlayTime = 0;
     }
 
     // Decode base64 to Int16 PCM
@@ -275,13 +283,22 @@ export class VoiceClient {
       floatData[i] = int16View[i] / 32768;
     }
 
-    // Create audio buffer and play
-    const audioBuffer = this.audioContext.createBuffer(1, floatData.length, sampleRate);
+    // Create audio buffer
+    const audioBuffer = this.playbackContext.createBuffer(1, floatData.length, sampleRate);
     audioBuffer.getChannelData(0).set(floatData);
 
-    const source = this.audioContext.createBufferSource();
+    // Schedule chunk to play after previous chunks (sequential playback)
+    const currentTime = this.playbackContext.currentTime;
+    if (this.nextPlayTime < currentTime) {
+      this.nextPlayTime = currentTime;
+    }
+
+    const source = this.playbackContext.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(this.audioContext.destination);
-    source.start();
+    source.connect(this.playbackContext.destination);
+    source.start(this.nextPlayTime);
+
+    // Update next play time for subsequent chunks
+    this.nextPlayTime += audioBuffer.duration;
   }
 }
