@@ -1,62 +1,51 @@
 # Development Workflow
 
 > **Purpose**: Git workflow, CI/CD pipelines, and pre-commit checklist
-> **Lifecycle**: Stable (update when branching strategy or CI/CD processes change)
+> **Lifecycle**: Stable (update when tooling or processes change)
 
 ---
 
-## 🌿 Git Branching Strategy
+## Workflow Tier: Simple
 
-This project uses a **feature branch workflow** with direct merges to `main`.
+| Aspect | Configuration |
+|--------|---------------|
+| **Branches** | `main` only |
+| **Protection** | None |
+| **Deployment** | Push to main triggers deploy |
+| **Worktrees** | For parallel agent work |
 
-### Branch Overview
+See `CONTRIBUTING.md` for detailed workflow guide.
 
-| Branch | Purpose | Deployments | Auto-Merge | Approval Required |
-|--------|---------|-------------|-----------|-------------------|
-| `main` | Production-ready code | Firebase Hosting + Functions | No | Yes (1 approval) |
-| `feature/*` | New features | None (local dev only) | No | N/A |
-| `fix/*` | Bug fixes | None (local dev only) | No | N/A |
+---
 
-### Development Flow
+## Development Flow
 
 ```bash
-# 1. Always branch from main
-git checkout main
+# 1. Pull latest
 git pull origin main
-git checkout -b feature/my-feature
 
-# 2. Work on feature with frequent commits
+# 2. Make changes
+# ... edit files ...
+
+# 3. Run pre-commit checks (see below)
+pnpm lint:fix && pnpm format && pnpm test
+
+# 4. Commit with issue reference
 git add .
-git commit -m "feat: add feature (Relates to #123)"
+git commit -m "feat: add feature
 
-# 3. Push and create PR
-git push -u origin feature/my-feature
-gh pr create --title "feat: add feature" --body "Closes #123"
+Closes #123"
 
-# 4. CI runs: lint → format → test → build
-# 5. After approval, merge to main
-gh pr merge --merge
-```
+# 5. Push to main
+git push origin main
 
-### PR Merge Strategy
-
-**RULE**: Use `--merge` for all PRs (creates merge commit).
-
-**Why**: Preserves feature branch history for easier debugging and rollback.
-
-**How to Merge**:
-```bash
-# After PR approval and CI passes
-gh pr merge 123 --merge
-
-# Do NOT use:
-gh pr merge --squash  # ❌ Loses commit history
-gh pr merge --rebase  # ❌ Rewrites history
+# 6. CI runs automatically
+gh run watch
 ```
 
 ---
 
-## 🔍 Pre-Commit Checklist (CRITICAL)
+## Pre-Commit Checklist (CRITICAL)
 
 **Before EVERY commit**, complete this checklist:
 
@@ -85,31 +74,16 @@ git diff --staged
 
 ---
 
-## 🚀 CI/CD Workflow Expectations
+## CI/CD Workflow
 
-After pushing to branches, **GitHub Actions** automatically runs these workflows:
+After pushing to `main`, **GitHub Actions** automatically runs:
 
-| Workflow | Triggers | Checks | Pass Criteria | Duration |
-|----------|----------|--------|---------------|----------|
-| **Validate** | Push to any branch | Lint, format check | All pass | ~2 min |
-| **Test** | Push to any branch | Unit tests, integration tests | All pass | ~5 min |
-| **Build** | Push to any branch | TypeScript compile, package build | No errors | ~3 min |
-| **Deploy** | Merge to `main` | Deploy to Firebase | Successful deployment | ~5 min |
-
-### Branch-Specific Workflows
-
-**On `feature/*` → `main` PR**:
-1. Lint check (`eslint`)
-2. Format check (`prettier`)
-3. Unit tests (`vitest`)
-4. TypeScript compilation
-5. Build all packages
-
-**On `main` push (after merge)**:
-1. All validation steps above
-2. Deploy web app to Firebase Hosting
-3. Deploy functions to Firebase Functions
-4. Deploy voice service to Cloud Run
+| Workflow | Checks | Duration |
+|----------|--------|----------|
+| **Validate** | Lint, format check | ~2 min |
+| **Test** | Unit tests, integration tests | ~5 min |
+| **Build** | TypeScript compile, package build | ~3 min |
+| **Deploy** | Firebase Hosting + Functions | ~5 min |
 
 ### Monitoring Workflow Status
 
@@ -138,7 +112,7 @@ gh run view 1234567890
 
 ---
 
-## 🧪 Test Organization
+## Test Organization
 
 ### Directory Structure
 
@@ -150,14 +124,12 @@ packages/
 │       │   └── marketplace.test.ts    # Unit tests
 │       └── __tests__/
 │           └── integration/           # Integration tests
-│               └── sage-client.test.ts
 │
 ├── agent-core/
 │   └── src/
 │       ├── agent.test.ts             # Unit tests
 │       └── __tests__/
 │           └── e2e/                  # E2E tests
-│               └── voice-flow.test.ts
 │
 └── voice-service/
     └── src/
@@ -165,7 +137,6 @@ packages/
         │   └── whisper.test.ts       # Unit tests
         └── __tests__/
             └── integration/           # Integration tests
-                └── webrtc-flow.test.ts
 ```
 
 ### Test Types
@@ -175,8 +146,6 @@ packages/
 | **Unit** | `*.test.ts` (co-located) | No | `pnpm test:unit` |
 | **Integration** | `__tests__/integration/` | Yes (Solana devnet) | `pnpm test:integration` |
 | **E2E** | `__tests__/e2e/` | Yes (all services) | `pnpm test:e2e` |
-
-**Rule**: Unit tests have no external dependencies (mocked). Integration tests use real services (devnet). E2E tests test the full system.
 
 ### Running Tests Locally
 
@@ -199,25 +168,24 @@ pnpm test:coverage
 
 ---
 
-## 🔐 Environment Variables
+## Environment Variables
 
-### How It Works
+### Priority Order
 
-Environment variables are loaded from `.env` files in each package directory. The project uses `dotenv` to load variables at runtime.
-
-**Priority order:**
 1. `.env.local` (git-ignored, for local development)
 2. `.env` (template, committed to repo)
 3. Environment variables set in CI/CD (GitHub Secrets)
 
-### Usage
+### Setup
 
 ```bash
 # Copy template for each package
 cp packages/mcp-staratlas-server/.env.example packages/mcp-staratlas-server/.env
 cp packages/agent-core/.env.example packages/agent-core/.env
+cp packages/voice-service/.env.example packages/voice-service/.env
+cp packages/web-app/.env.example packages/web-app/.env
 
-# Edit with your API keys
+# Edit each .env file with your API keys
 # Never commit .env.local files (they're git-ignored)
 ```
 
@@ -247,20 +215,9 @@ VITE_FIREBASE_PROJECT_ID=your_project_id
 VITE_FIREBASE_API_KEY=your_api_key
 ```
 
-### Troubleshooting
-
-#### Error: Missing environment variable
-
-**Cause**: `.env` file not present or variable not set
-
-**Solutions:**
-1. Copy `.env.example` to `.env` in the package directory
-2. Set all required variables with your API keys
-3. Restart development server after changes
-
 ---
 
-## 📦 Local Development Setup
+## Local Development Setup
 
 ### Prerequisites
 
@@ -272,18 +229,13 @@ VITE_FIREBASE_API_KEY=your_api_key
 
 ```bash
 # Clone repository
-git clone https://github.com/IAMSamuelRodda/star-atlas-agent.git
-cd star-atlas-agent
+git clone https://github.com/IAMSamuelRodda/iris.git
+cd iris
 
 # Install all dependencies
 pnpm install
 
-# Set up environment variables for each package
-cp packages/mcp-staratlas-server/.env.example packages/mcp-staratlas-server/.env
-cp packages/agent-core/.env.example packages/agent-core/.env
-cp packages/voice-service/.env.example packages/voice-service/.env
-cp packages/web-app/.env.example packages/web-app/.env
-# Edit each .env file with your API keys
+# Set up environment variables (see above)
 
 # Start all services in development mode
 pnpm dev
@@ -315,7 +267,7 @@ pnpm dev
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### pnpm install fails
 
@@ -342,9 +294,6 @@ pnpm -r build
 
 ### Firebase Functions deploy fails
 
-**Cause**: Missing Firebase credentials or project not selected
-
-**Solution**:
 ```bash
 # Login to Firebase
 firebase login
@@ -358,21 +307,18 @@ firebase deploy --only functions
 
 ### Voice Service WebRTC connection fails
 
-**Cause**: STUN/TURN server not accessible or misconfigured
-
-**Solution**:
 1. Check browser console for WebRTC errors
 2. Verify STUN/TURN server configuration in `packages/voice-service/src/webrtc/config.ts`
 3. Test connection with minimal WebRTC example
 
 ---
 
-## 📚 Additional Resources
+## Additional Resources
 
 - **Architecture**: `ARCHITECTURE.md` - Complete technical specifications
-- **Progress Tracking**: `CONTRIBUTING.md` - Issue workflow and commands
+- **Workflow Guide**: `CONTRIBUTING.md` - Git workflow and progress tracking
 - **Project Navigation**: `CLAUDE.md` - Quick reference for finding information
 
 ---
 
-**Last Updated**: 2025-11-12
+**Last Updated**: 2025-12-02

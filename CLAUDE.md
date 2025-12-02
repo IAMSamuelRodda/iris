@@ -50,19 +50,24 @@ See `ARCHITECTURE.md` for complete details.
 
 ## 🔄 Workflow Quick Reference
 
-**Git Worktrees** (NOT branch switching):
+**Tier**: Simple (`main` only, no branch protection)
+
+**Git Worktrees** (for parallel agent work):
 ```bash
-# Create worktree for feature work
-git worktree add ../iris--feature-x feature-x
+# Create worktree on main
+git worktree add ../iris--work main
 
-# Work in isolated directory (no checkout conflicts)
-cd ../iris--feature-x
+# Work in isolated directory
+cd ../iris--work
 
-# When done, remove worktree
-git worktree remove ../iris--feature-x
+# Commit and push to main
+git push origin main
+
+# Clean up
+git worktree remove ../iris--work
 ```
 
-**Why worktrees?** Multiple Claude Code agents on same machine cause conflicts when switching branches. Worktrees provide isolated directories sharing the same `.git` objects.
+**Why worktrees?** Multiple Claude Code agents on same machine need isolated directories. Worktrees share the same `.git` objects without checkout conflicts.
 
 **Commit linking**: Use `Closes #N` or `Relates to #N` in all commits.
 
@@ -77,4 +82,4 @@ git worktree remove ../iris--feature-x
 
 ---
 
-**Last Updated**: 2025-11-12
+**Last Updated**: 2025-12-02

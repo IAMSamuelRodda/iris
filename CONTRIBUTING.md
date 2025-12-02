@@ -5,62 +5,99 @@
 
 ---
 
-## Git Workflow: Worktrees (NOT Branch Switching)
+## Workflow Tier: Simple
 
-**Why worktrees?** Multiple Claude Code agents on the same machine cause conflicts when switching branches. A Git repo has one HEAD - multiple terminals switching branches corrupts state. Worktrees provide isolated directories sharing the same `.git` objects.
+**Branches**: `main` only
+**Protection**: None (direct pushes allowed)
+**Worktrees**: For parallel agent work on main
 
-### Start Feature Work
+### Why Simple Tier?
+
+- Solo developer / small team
+- Fast iteration and experimentation
+- AI-assisted development
+- No external stakeholder approval needed
+
+---
+
+## Git Workflow: Direct Commits to Main
+
+### Standard Development
+
+```bash
+# Pull latest
+git pull origin main
+
+# Make changes
+# ... edit files ...
+
+# Commit with issue reference
+git add .
+git commit -m "feat: add voice streaming
+
+Closes #42"
+
+# Push directly to main
+git push origin main
+```
+
+### Issue Linking (REQUIRED)
+
+Every commit should reference an issue:
+- `Closes #42` - Closes on merge
+- `Relates to #42` - References only
+- `Fixes #42` - Closes on merge (bug fixes)
+
+---
+
+## Parallel Agent Work: Worktrees
+
+**Why worktrees?** Multiple Claude Code agents on the same machine cause conflicts when switching branches. Worktrees provide isolated directories sharing the same `.git` objects.
+
+### When to Use Worktrees
+
+Use worktrees when:
+- Multiple agents need to work simultaneously
+- Testing changes in isolation before committing to main
+- Large refactors that shouldn't block other work
+
+### Worktree Commands
 
 ```bash
 # From main repo directory
 cd /home/x-forge/repos/iris
 
-# Create worktree for new feature
-git worktree add ../iris--mcp-server feature/mcp-server
+# Create worktree for isolated work
+git worktree add ../iris--experiment main
 
 # Work in the isolated directory
-cd ../iris--mcp-server
+cd ../iris--experiment
 
-# Now you can work without affecting main repo
+# Make changes, test locally
 pnpm install
 pnpm dev
-```
 
-### During Work
-
-```bash
-# Commit as normal (in worktree directory)
+# When ready, commit and push (still on main)
 git add .
-git commit -m "feat: add MCP server foundation
+git commit -m "feat: experimental feature
 
 Relates to #42"
+git push origin main
 
-git push -u origin feature/mcp-server
-```
-
-### Complete Work
-
-```bash
-# Create PR from worktree
-gh pr create --base main --title "feat: MCP server foundation"
-
-# After PR merged, clean up
+# Clean up worktree
 cd /home/x-forge/repos/iris
-git worktree remove ../iris--mcp-server
-git branch -d feature/mcp-server  # if merged
+git worktree remove ../iris--experiment
 ```
 
-### Parallel Agent Work
-
-Multiple Claude Code agents can work simultaneously:
+### Parallel Agent Example
 
 ```
-Terminal 1: /home/x-forge/repos/iris (main branch)
-Terminal 2: /home/x-forge/repos/iris--mcp-server (feature/mcp-server)
-Terminal 3: /home/x-forge/repos/iris--voice-service (feature/voice-service)
+Terminal 1: /home/x-forge/repos/iris (main)
+Terminal 2: /home/x-forge/repos/iris--voice (worktree on main)
+Terminal 3: /home/x-forge/repos/iris--mcp (worktree on main)
 ```
 
-Each worktree is fully isolated - no checkout conflicts.
+Each worktree is isolated - agents can work in parallel without conflicts.
 
 ---
 
@@ -70,27 +107,15 @@ Each worktree is fully isolated - no checkout conflicts.
 # List active worktrees
 git worktree list
 
-# Create worktree
-git worktree add ../iris--<feature> feature/<feature>
+# Create worktree (for parallel work)
+git worktree add ../iris--<name> main
 
-# Remove worktree (after PR merged)
-git worktree remove ../iris--<feature>
+# Remove worktree (when done)
+git worktree remove ../iris--<name>
 
 # Prune stale worktrees
 git worktree prune
 ```
-
----
-
-## Branch Strategy (Simple)
-
-```
-feature/* --> main (direct PRs)
-```
-
-- **main**: Production-ready code
-- **feature/***: Development work (via worktrees)
-- No dev/staging branch for now (keep it simple)
 
 ---
 
@@ -99,10 +124,6 @@ feature/* --> main (direct PRs)
 **Pattern**: `<type>: <description>`
 
 **Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
-
-**Issue Linking** (REQUIRED):
-- `Closes #42` - Closes on merge
-- `Relates to #42` - References only
 
 **Example**:
 ```
@@ -138,13 +159,14 @@ gh issue edit <N> --add-label "in-progress"
 - [ ] Implemented
 - [ ] Tests passing (when applicable)
 - [ ] Issue linked (`Closes #N`)
-- [ ] PR merged to main
+- [ ] Pushed to main
 
 ### Bug Fix
 - [ ] Root cause identified
 - [ ] Fix implemented
 - [ ] Issue updated
+- [ ] Pushed to main
 
 ---
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-02
