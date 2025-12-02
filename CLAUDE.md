@@ -19,32 +19,13 @@
 
 ---
 
-## 🏗️ Architecture Quick Facts
-
-**Style**: Event-Driven Microservices (Voice Service, Agent Core, MCP Server, Web App)
-
-**Structure**: Serverless + DynamoDB (AWS Free Tier optimized)
-
-See `ARCHITECTURE.md` for complete details.
-
----
-
-## 🎯 Naming Conventions
-
-- Packages: `kebab-case` (e.g., `mcp-staratlas-server`)
-- Components: `PascalCase.tsx` (e.g., `FleetStatus.tsx`)
-- Hooks: `use{Name}.ts` (e.g., `useVoice.ts`)
-- Services: `{name}Service.ts` (e.g., `voiceService.ts`)
-
----
-
 ## ⚠️ Critical Constraints
 
 1. **Voice latency**: <500ms round-trip (streaming STT/TTS required)
 2. **Wallet security**: NEVER auto-sign transactions (explicit approval)
-3. **Real-time data**: WebSocket subscriptions (not polling)
-4. **AWS Free Tier**: <$10/month MVP budget
-5. **pnpm only**: Package management consistency
+3. **pnpm only**: Package management consistency
+
+See `ARCHITECTURE.md` for system design and tech stack.
 
 ---
 

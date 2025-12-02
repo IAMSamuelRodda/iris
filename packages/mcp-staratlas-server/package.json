@@ -17,8 +17,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@solana/web3.js": "^1.95.0",
+    "@staratlas/data-source": "^0.9.0",
+    "@staratlas/player-profile": "^0.11.0",
+    "@staratlas/sage": "1.9.0-alpha.8",
     "zod": "^3.23.0"
   },
   "devDependencies": {

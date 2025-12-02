@@ -3,7 +3,7 @@
 > **Purpose**: Track items needing attention before/during IRIS implementation
 > **Generated from**: specs/BLUEPRINT-project-staratlas-20251201.yaml
 
-**Last Updated**: 2025-12-01
+**Last Updated**: 2025-12-02
 
 ---
 
@@ -21,14 +21,19 @@ These tasks have complexity >3.0 and should be broken down further before implem
 - Security-critical: mistakes could cause fund loss
 - Must handle various transaction types (SPL transfers, SAGE operations)
 
-**Suggested breakdown**:
-1. `subtask_1_2_3_1`: Research Solana transaction structure (spike)
-2. `subtask_1_2_3_2`: Implement basic SOL transfer transaction builder
-3. `subtask_1_2_3_3`: Add SPL token transfer support
-4. `subtask_1_2_3_4`: Add SAGE operation transaction templates
-5. `subtask_1_2_3_5`: Implement transaction validation and error handling
+**Decomposition** (updated 2025-12-02):
 
-**Status**: 🔴 Not started
+| Subtask | Description | Est. | Complexity | Status |
+|---------|-------------|------|------------|--------|
+| subtask_1_2_3_1 | **Spike**: Research Solana transaction structure | 0.5d | 1.5 | 🔴 |
+| subtask_1_2_3_2 | Implement basic SOL transfer builder | 1d | 2.0 | 🔴 |
+| subtask_1_2_3_3 | Add SPL token transfer support | 1d | 2.2 | 🔴 |
+| subtask_1_2_3_4 | Add SAGE operation templates | 1d | 2.5 | ⏸️ DEFERRED |
+| subtask_1_2_3_5 | Transaction validation & security checks | 0.5d | 2.5 | 🔴 |
+
+**MVP Recommendation**: ⏸️ **DEFER ENTIRE TASK** - Voice assistant MVP doesn't need transaction preparation. Users check balances/status via voice, execute transactions via Star Atlas UI. Revisit post-MVP if user demand exists.
+
+**Status**: ⏸️ Deferred (MVP scope cut)
 
 ---
 
@@ -42,14 +47,19 @@ These tasks have complexity >3.0 and should be broken down further before implem
 - State management across reconnections
 - Must handle rate limiting and backpressure
 
-**Suggested breakdown**:
-1. `subtask_1_3_3_1`: Implement basic Solana WebSocket connection handler
-2. `subtask_1_3_3_2`: Add account subscription management
-3. `subtask_1_3_3_3`: Implement reconnection and state recovery
-4. `subtask_1_3_3_4`: Add rate limiting and backpressure handling
-5. `subtask_1_3_3_5`: Create fleet update event transformation
+**Decomposition** (updated 2025-12-02):
 
-**Status**: 🔴 Not started
+| Subtask | Description | Est. | Complexity | Status |
+|---------|-------------|------|------------|--------|
+| subtask_1_3_3_1 | Basic Solana WebSocket connection handler | 1d | 2.0 | 🔴 |
+| subtask_1_3_3_2 | Account subscription management (subscribe/unsubscribe) | 1d | 2.5 | 🔴 |
+| subtask_1_3_3_3 | Reconnection and state recovery | 0.5d | 2.8 | 🔴 |
+| subtask_1_3_3_4 | Rate limiting and backpressure handling | 0.5d | 2.3 | 🔴 |
+| subtask_1_3_3_5 | Fleet update event transformation (Solana → IRIS format) | 0.5d | 2.0 | 🔴 |
+
+**MVP Recommendation**: ⏸️ **DEFER - Use polling instead.** Implement `getFleetStatus` on 30-60s interval for MVP. Provides "near real-time" with far less complexity. WebSocket subscriptions are a post-MVP optimization when users demand faster updates.
+
+**Status**: ⏸️ Deferred (MVP scope cut - use polling)
 
 ---
 
@@ -63,20 +73,55 @@ These tasks have complexity >3.0 and should be broken down further before implem
 - Multiple components in chain (WebRTC → Chatterbox → Agent → Chatterbox → WebRTC)
 - Optimization requires profiling across distributed system
 
-**Suggested breakdown**:
-1. `subtask_4_3_3_1`: Add timing instrumentation to voice pipeline
-2. `subtask_4_3_3_2`: Create latency dashboard/logging
-3. `subtask_4_3_3_3`: Identify bottlenecks via profiling
-4. `subtask_4_3_3_4`: Implement streaming optimizations (overlap STT/Agent/TTS)
-5. `subtask_4_3_3_5`: Add latency alerts and fallback triggers
+**Decomposition** (updated 2025-12-02):
 
-**Status**: 🔴 Not started
+| Subtask | Description | Est. | Complexity | Status | MVP? |
+|---------|-------------|------|------------|--------|------|
+| subtask_4_3_3_1 | Add timing instrumentation to voice pipeline | 0.5d | 2.0 | 🔴 | ✅ Yes |
+| subtask_4_3_3_2 | Create latency logging/dashboard | 0.5d | 1.8 | 🔴 | ✅ Yes |
+| subtask_4_3_3_3 | Profile and identify bottlenecks | 0.5d | 2.5 | 🔴 | Post-MVP |
+| subtask_4_3_3_4 | Implement streaming optimizations (overlap STT/Agent/TTS) | 1d | 3.0 | 🔴 | Post-MVP |
+| subtask_4_3_3_5 | Add latency alerts and text-only fallback trigger | 0.5d | 2.2 | 🔴 | ✅ Yes |
+
+**MVP Recommendation**: Implement 4_3_3_1, 4_3_3_2, and 4_3_3_5 only. Get baseline measurements first, then optimize post-MVP. Text-only should be the default fallback if voice latency exceeds threshold.
+
+**Status**: 🟡 Partially in scope (3 of 5 subtasks for MVP)
 
 ---
 
 ## Needs Spike Investigation
 
 These items have high uncertainty (≥4) and need research before implementation.
+
+### SPIKE: SAGE SDK Fleet Enumeration
+**Feature**: task_1_3_1 enhancement (getFleetStatus full implementation)
+**Uncertainty**: 4.0
+
+**Current State**:
+MVP implementation verifies player profile existence. Full fleet data (ship counts, states, resources) requires proper SAGE SDK integration with Anchor IDL parsing.
+
+**Questions to answer**:
+1. How to load and use @staratlas/sage IDL with Anchor?
+2. What's the correct account structure for Fleet enumeration?
+3. How to filter Fleet accounts by player profile efficiently?
+4. What's the data size/RPC cost for fetching all fleet data?
+
+**Suggested spike structure**:
+```yaml
+BLUEPRINT-spike-sage-sdk-integration-20251203.yaml
+
+deliverables:
+  - Research report: SAGE SDK account structures
+  - POC: Fetch one fleet's full state
+  - Decision: IDL loading strategy
+  - Documentation: Fleet data parsing guide
+
+duration: 2-3 days
+```
+
+**Status**: 🔍 Needs spike before full implementation
+
+---
 
 ### SPIKE: Chatterbox Integration
 **Feature**: feature_4_1 (Chatterbox Installation & Configuration)
@@ -269,13 +314,22 @@ IRIS Provides:
 ## Action Items
 
 1. [ ] **Create spike blueprint** for Chatterbox integration
-2. [ ] **Decompose task_1_2_3** (prepareTransaction) before implementation
-3. [ ] **Decompose task_1_3_3** (subscribeToFleetUpdates) before implementation
-4. [ ] **Decompose task_4_3_3** (latency monitoring) before implementation
+2. [x] **Decompose task_1_2_3** (prepareTransaction) - DONE, DEFERRED from MVP (2025-12-02)
+3. [x] **Decompose task_1_3_3** (subscribeToFleetUpdates) - DONE, DEFERRED from MVP (2025-12-02)
+4. [x] **Decompose task_4_3_3** (latency monitoring) - DONE, partial MVP scope (2025-12-02)
 5. [ ] **Set up monitoring** for external API availability
 6. [ ] **Coordinate with CITADEL** on API timeline and contract validation
 7. [ ] **Create mock API** responses for CITADEL endpoints (task_8_1_3)
 8. [ ] **Spike ASP-001** after CITADEL historical data available (assess prediction feasibility)
+
+## MVP Scope Decisions (2025-12-02)
+
+| Decision | Rationale |
+|----------|-----------|
+| **DEFER prepareTransaction** | Voice assistant checks status; users execute via Star Atlas UI |
+| **DEFER WebSocket subscriptions** | Use polling (30-60s) for MVP; near real-time is sufficient |
+| **SKIP traditional CI/CD** | Main-only workflow; deploy via `docker-compose` on VPS |
+| **Text-only fallback default** | Voice is aspirational for MVP; must work without it |
 
 ---
 

@@ -3,7 +3,7 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-02
+**Last Updated**: 2025-12-02 (MVP scope refined)
 **Current Phase**: Implementation (Epic 1 - MCP Server)
 **Version**: 0.1.0 (Pre-MVP)
 
@@ -18,9 +18,10 @@
 | Infrastructure | Done | Using existing DO VPS (640MB+ RAM available) |
 | Monorepo Setup | Done | pnpm workspaces, 5 packages scaffolded |
 | MCP Server Foundation | Done | Feature 1.1 complete (lifecycle, tools, errors) |
-| CI/CD Pipeline | Pending | Not started |
+| CI/CD Pipeline | N/A | Main-only workflow; deploy via docker-compose |
 | Test Coverage | Pending | No tests yet |
 | Known Bugs | None | Early implementation |
+| **MVP Scope** | **Reduced** | 3 tasks + 1 epic deferred (see below) |
 
 ---
 
@@ -33,6 +34,13 @@
   - Server lifecycle handlers (connect, shutdown)
   - Tool registration framework with error handling
   - First tool: `getWalletBalance` (Solana)
+- Solana Blockchain Tools (Feature 1.2) complete:
+  - `getTransactionHistory` tool with pagination support
+  - Transaction type inference (SOL/token transfers, program interactions)
+  - MVP scope refined (prepareTransaction deferred)
+- Star Atlas Fleet Tools (Feature 1.3) in progress:
+  - `getFleetStatus` MVP: player profile verification
+  - SAGE SDK spike needed for full fleet enumeration
 
 **Completed (2025-12-01):**
 - Vision alignment session (docs/planning-session-2025-11-12.md)
@@ -41,12 +49,19 @@
 - Voice service updated to use Chatterbox (self-hosted STT/TTS)
 
 **In Progress:**
-- Epic 1: MCP Server - Solana Blockchain Tools (Feature 1.2)
+- Epic 1: MCP Server - Star Atlas Fleet Tools (Feature 1.3)
 
-**Next Up:**
-- [ ] `getTransactionHistory` tool (task_1_2_2)
-- [ ] `prepareTransaction` tool (task_1_2_3)
-- [ ] Star Atlas Fleet Tools (Feature 1.3)
+**Next Up (MVP scope):**
+- [ ] `predictFuelDepletion` tool (task_1_3_2)
+- [ ] Market Tools: `getTokenPrices`, `getMarketplaceOrders` (Feature 1.4)
+- [ ] SAGE SDK spike for full fleet enumeration
+
+**Deferred from MVP (2025-12-02):**
+- ⏸️ `prepareTransaction` tool - users execute via Star Atlas UI
+- ⏸️ `subscribeToFleetUpdates` WebSocket - use polling instead
+- ⏸️ Latency optimization - measure first, optimize post-MVP
+- ⏸️ CITADEL Integration (Epic 8) - entire epic is post-MVP
+- ⏸️ CI/CD pipelines - main-only workflow, deploy via docker-compose
 
 ---
 

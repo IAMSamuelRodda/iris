@@ -32,19 +32,24 @@
 | task_1_1_2 | Implement server lifecycle handlers | 1.8 | 1d | 🟢 |
 | task_1_1_3 | Add tool registration and error handling framework | 2.2 | 2d | 🟢 |
 
-### Feature 1.2: Solana Blockchain Tools (6 days)
+### Feature 1.2: Solana Blockchain Tools (4 days MVP) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_1_2_1 | Implement getWalletBalance tool | 2.3 | 2d | 🟢 |
-| task_1_2_2 | Implement getTransactionHistory tool | 2.5 | 2d | 🔴 |
-| task_1_2_3 | Implement prepareTransaction tool | **3.2** ⚠️ | 2d | 🔴 |
+| task_1_2_2 | Implement getTransactionHistory tool | 2.5 | 2d | 🟢 |
+| task_1_2_3 | Implement prepareTransaction tool | **3.2** ⚠️ | 2d | ⏸️ DEFERRED |
 
-### Feature 1.3: Star Atlas Fleet Tools (7 days)
+> **Note**: task_1_2_3 deferred from MVP - users check status via voice, execute via Star Atlas UI
+
+### Feature 1.3: Star Atlas Fleet Tools (5 days MVP)
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_1_3_1 | Implement getFleetStatus tool | 3.0 | 3d | 🔴 |
+| task_1_3_1 | Implement getFleetStatus tool | 3.0 | 3d | 🟡 MVP |
 | task_1_3_2 | Implement predictFuelDepletion tool | 2.8 | 2d | 🔴 |
-| task_1_3_3 | Implement subscribeToFleetUpdates WebSocket | **3.5** ⚠️ | 2d | 🔴 |
+| task_1_3_3 | Implement subscribeToFleetUpdates WebSocket | **3.5** ⚠️ | 2d | ⏸️ DEFERRED |
+
+> **Note**: task_1_3_1 MVP implementation verifies player profile; full fleet enumeration needs SAGE SDK spike
+> **Note**: task_1_3_3 deferred from MVP - use polling (getFleetStatus on 30-60s interval) instead
 
 ### Feature 1.4: Market & Economic Tools (4 days)
 | ID | Task | Complexity | Est. | Status |
@@ -138,12 +143,14 @@
 | task_4_2_2 | Add peer connection management | 3.0 | 2d | 🔴 |
 | task_4_2_3 | Implement connection recovery | 2.8 | 1d | 🔴 |
 
-### Feature 4.3: Audio Streaming Pipeline (6 days)
+### Feature 4.3: Audio Streaming Pipeline (5 days MVP)
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_4_3_1 | Implement audio capture to STT | 3.0 | 2d | 🔴 |
 | task_4_3_2 | Implement TTS response streaming | 3.2 | 2d | 🔴 |
-| task_4_3_3 | Add latency monitoring | **3.5** ⚠️ | 2d | 🔴 |
+| task_4_3_3 | Add latency monitoring | **3.5** ⚠️ | 1.5d | 🟡 Partial |
+
+> **Note**: task_4_3_3 partial MVP scope - instrumentation + logging + fallback only (1.5d); optimization deferred
 
 ### Feature 4.4: Voice Service API (3 days)
 | ID | Task | Complexity | Est. | Status |
@@ -340,26 +347,36 @@
 
 ## Summary
 
-| Epic | Features | Tasks | Est. Days | Status |
-|------|----------|-------|-----------|--------|
-| MCP Server | 4 | 11 | 21 | 🔴 |
-| Memory Service | 4 | 10 | 13 | 🔴 |
-| Agent Core | 4 | 9 | 15 | 🔴 |
-| Voice Service | 4 | 10 | 18 | 🔴 |
-| Web Application | 5 | 13 | 20 | 🔴 |
-| Deployment | 4 | 10 | 14 | 🔴 |
-| Testing | 3 | 9 | 15 | 🔴 |
-| **CITADEL Integration** | **11** | **35** | **37-40** | 🔴 |
-| **TOTAL** | **39** | **107** | **~153** | 🔴 |
+| Epic | Features | Tasks | Est. Days | Status | MVP Scope |
+|------|----------|-------|-----------|--------|-----------|
+| MCP Server | 4 | 11 | 21 → **17** | 🟡 | 2 tasks deferred |
+| Memory Service | 4 | 10 | 13 | 🔴 | Full |
+| Agent Core | 4 | 9 | 15 | 🔴 | Full |
+| Voice Service | 4 | 10 | 18 → **17.5** | 🔴 | Latency opt. deferred |
+| Web Application | 5 | 13 | 20 | 🔴 | Full |
+| Deployment | 4 | 10 | 14 | 🔴 | Full (no CI/CD) |
+| Testing | 3 | 9 | 15 | 🔴 | Full |
+| **CITADEL Integration** | **11** | **35** | **37-40** | 🔴 | Post-MVP |
+| **MVP TOTAL** | **28** | **72** | **~97** | 🟡 | Reduced |
+
+> **MVP Scope Cuts (2025-12-02)**: prepareTransaction, WebSocket subscriptions, latency optimization deferred. CITADEL is post-MVP.
 
 ---
 
 ## Deferred (Post-MVP)
 
+**Original deferrals:**
 - Personality progression (colleague → partner → friend)
 - Vector embeddings for semantic memory
 - Always-listening voice mode
 - zProfile SSO integration
+
+**MVP scope cuts (2025-12-02):**
+- task_1_2_3: `prepareTransaction` tool (users execute via Star Atlas UI)
+- task_1_3_3: `subscribeToFleetUpdates` WebSocket (use polling instead)
+- task_4_3_3 partial: Latency optimization subtasks (measure first, optimize later)
+- Epic 8: CITADEL Integration (entire epic is post-MVP)
+- CI/CD pipelines (main-only workflow, deploy via docker-compose)
 
 ---
 

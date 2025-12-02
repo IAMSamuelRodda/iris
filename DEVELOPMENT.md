@@ -74,41 +74,42 @@ git diff --staged
 
 ---
 
-## CI/CD Workflow
+## Deployment (VPS + Docker)
 
-After pushing to `main`, **GitHub Actions** automatically runs:
+**Infrastructure**: Digital Ocean VPS (existing droplet, $0 incremental)
+**Pattern**: Docker Compose with manual deploy
 
-| Workflow | Checks | Duration |
-|----------|--------|----------|
-| **Validate** | Lint, format check | ~2 min |
-| **Test** | Unit tests, integration tests | ~5 min |
-| **Build** | TypeScript compile, package build | ~3 min |
-| **Deploy** | Firebase Hosting + Functions | ~5 min |
-
-### Monitoring Workflow Status
+### Deploy to VPS
 
 ```bash
-# View recent workflow runs
-gh run list
+# 1. Build locally
+pnpm build
 
-# Watch latest workflow (blocks until complete)
-gh run watch
+# 2. Push to main
+git push origin main
 
-# View specific workflow logs
-gh run view 1234567890
+# 3. SSH to VPS and pull + restart
+ssh vps 'cd /opt/iris && git pull && docker-compose up -d --build'
 ```
 
-### If Workflows Fail
+### Docker Compose Services
 
-1. **Check which workflow failed**: `gh run list`
-2. **View failure logs**: `gh run view --log-failed`
-3. **Fix issues locally** using pre-commit checklist
-4. **Push fix**: CI will re-run automatically
+```yaml
+# docker-compose.yml (on VPS)
+services:
+  mcp-server:     # MCP tools for Solana/Star Atlas
+  agent-core:     # Claude Agent SDK
+  voice-service:  # Chatterbox STT/TTS
+  web-app:        # React frontend (static)
+```
 
-**Common failures**:
-- **Test failures**: Check test output, fix failing tests
-- **Lint failures**: Run `pnpm lint:fix` to auto-fix
-- **Build failures**: Check TypeScript errors, fix type issues
+### Why No CI/CD Pipeline?
+
+Simple workflow tier = manual deploy via SSH. Benefits:
+- No GitHub Actions complexity
+- Immediate visibility into deploy process
+- $0 CI/CD cost
+- Easy rollback (`git checkout HEAD~1 && docker-compose up -d`)
 
 ---
 
@@ -174,7 +175,7 @@ pnpm test:coverage
 
 1. `.env.local` (git-ignored, for local development)
 2. `.env` (template, committed to repo)
-3. Environment variables set in CI/CD (GitHub Secrets)
+3. VPS environment (set in docker-compose or systemd)
 
 ### Setup
 
@@ -201,18 +202,17 @@ HELIUS_API_KEY=your_helius_key (optional, for enhanced RPC)
 **agent-core:**
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
+DATABASE_PATH=/data/iris.db  # SQLite database
 ```
 
 **voice-service:**
 ```env
-OPENAI_API_KEY=sk-...  # For Whisper STT
-ELEVENLABS_API_KEY=... # For TTS
+CHATTERBOX_URL=http://localhost:8080  # Self-hosted Chatterbox
 ```
 
 **web-app:**
 ```env
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_API_KEY=your_api_key
+VITE_API_URL=http://localhost:3000
 ```
 
 ---
@@ -223,7 +223,7 @@ VITE_FIREBASE_API_KEY=your_api_key
 
 - Node.js >= 20.0.0
 - pnpm >= 9.0.0
-- Firebase CLI (`npm install -g firebase-tools`)
+- Docker + Docker Compose (for local services)
 
 ### Monorepo Setup
 
@@ -292,24 +292,24 @@ pnpm -r build
 # VS Code: Cmd+Shift+P → "TypeScript: Restart TS Server"
 ```
 
-### Firebase Functions deploy fails
+### Docker containers won't start
 
 ```bash
-# Login to Firebase
-firebase login
+# Check container logs
+docker-compose logs -f
 
-# Select project
-firebase use your-project-id
+# Rebuild containers
+docker-compose build --no-cache
 
-# Deploy
-firebase deploy --only functions
+# Check port conflicts
+lsof -i :3000  # or other ports
 ```
 
-### Voice Service WebRTC connection fails
+### Voice Service connection fails
 
-1. Check browser console for WebRTC errors
-2. Verify STUN/TURN server configuration in `packages/voice-service/src/webrtc/config.ts`
-3. Test connection with minimal WebRTC example
+1. Verify Chatterbox is running: `curl http://localhost:8080/health`
+2. Check WebSocket connectivity in browser console
+3. Ensure CORS is configured for your frontend URL
 
 ---
 
