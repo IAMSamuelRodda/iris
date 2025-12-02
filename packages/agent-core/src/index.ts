@@ -19,4 +19,7 @@ export { IRIS_BASE_PROMPT, buildSystemPrompt, generateUserContext } from "./syst
 // MCP Server
 export { createIrisMcpServer } from "./mcp-server.js";
 
+// API Server
+export { createApiServer, type ApiServerConfig } from "./api-server.js";
+
 export const VERSION = "0.1.0";

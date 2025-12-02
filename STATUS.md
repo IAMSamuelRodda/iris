@@ -3,8 +3,8 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-02 (Voice Service complete)
-**Current Phase**: Implementation (Epic 4 complete, web app next)
+**Last Updated**: 2025-12-02 (Web App complete)
+**Current Phase**: Implementation (Epic 5 complete, MVP ready for testing)
 **Version**: 0.1.0 (Pre-MVP)
 
 ---
@@ -21,6 +21,7 @@
 | **Memory Service** | **Done** | Epic 2 complete (knowledge graph, MCP tools, tests) |
 | **Agent Core** | **Done** | Epic 3 complete (Claude Agent SDK, IrisAgent class) |
 | **Voice Service** | **Done** | Epic 4 complete (faster-whisper STT, Chatterbox TTS) |
+| **Web App** | **Done** | Epic 5 complete (React + Vite, chat UI, voice PTT) |
 | CI/CD Pipeline | N/A | Main-only workflow; deploy via docker-compose |
 | Test Coverage | Partial | 12 tests for memory service |
 | Known Bugs | None | Early implementation |
@@ -31,6 +32,12 @@
 ## Current Focus
 
 **Completed (2025-12-02):**
+- **Web App (Epic 5) complete**:
+  - React + Vite frontend with space-themed dark UI
+  - Chat interface with streaming SSE responses
+  - Voice interface (push-to-talk) with WebSocket
+  - Agent HTTP API server (Hono + SSE streaming)
+  - Environment-based configuration (VITE_AGENT_API_URL, VITE_VOICE_WS_URL)
 - **Voice Service (Epic 4) complete**:
   - Python voice-backend (FastAPI + faster-whisper + Chatterbox)
   - Node.js WebSocket bridge for browser audio streaming
@@ -82,7 +89,8 @@
   - BLOCKED: Waiting for Citadel REST API (Epic 2-3)
 
 **Next Up (MVP scope):**
-- [ ] **Web App (Epic 5)**: React + Vite frontend with agent API
+- [ ] **Integration Testing**: End-to-end test of all services
+- [ ] **Docker Compose**: Add agent-core and web-app to docker-compose
 - [ ] CITADEL: REST API for blockchain/game data (separate repo)
 - [ ] IRIS: Update MCP tools to wrap Citadel REST (blocked on CITADEL)
 
@@ -153,10 +161,16 @@ None
    - Node.js WebSocket bridge for browser audio streaming
    - Docker Compose orchestration
 
-5. **Web App (Epic 5)** - Next
-   - React + Vite frontend
-   - Agent API integration
+5. ✅ **Web App** (Complete 2025-12-02)
+   - React + Vite frontend with dark theme
+   - Chat UI with streaming responses
    - Voice interface (push-to-talk)
+   - Agent HTTP API with Hono
+
+6. **Integration & Deployment** - Next
+   - Docker Compose for all services
+   - End-to-end testing
+   - VPS deployment
 
 ---
 
