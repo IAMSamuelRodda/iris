@@ -4,7 +4,7 @@
 > **Lifecycle**: Living (update daily/weekly during active development)
 
 **Last Updated**: 2025-12-02
-**Current Phase**: Planning & Architecture Refresh
+**Current Phase**: Implementation (Epic 1 - MCP Server)
 **Version**: 0.1.0 (Pre-MVP)
 
 ---
@@ -16,29 +16,37 @@
 | Planning | Done | Vision alignment complete, architecture refreshed |
 | Architecture Docs | Done | CLAUDE.md, README.md, ARCHITECTURE.md updated for VPS |
 | Infrastructure | Done | Using existing DO VPS (640MB+ RAM available) |
+| Monorepo Setup | Done | pnpm workspaces, 5 packages scaffolded |
+| MCP Server Foundation | Done | Feature 1.1 complete (lifecycle, tools, errors) |
 | CI/CD Pipeline | Pending | Not started |
-| Test Coverage | Pending | No code yet |
-| Known Bugs | None | No code yet |
+| Test Coverage | Pending | No tests yet |
+| Known Bugs | None | Early implementation |
 
 ---
 
 ## Current Focus
 
+**Completed (2025-12-02):**
+- Monorepo initialized with pnpm workspaces (5 packages)
+- MCP Server Foundation (Feature 1.1) complete:
+  - TypeScript + MCP SDK setup
+  - Server lifecycle handlers (connect, shutdown)
+  - Tool registration framework with error handling
+  - First tool: `getWalletBalance` (Solana)
+
 **Completed (2025-12-01):**
 - Vision alignment session (docs/planning-session-2025-11-12.md)
-- Archive mining: galactic-data wisdom extracted
-- Competitive analysis: EvEye feature comparison
-- **Architecture pivot**: AWS -> Digital Ocean VPS
-- **Personality progression DEFERRED** (focus on robust memory first)
+- Architecture pivot: AWS -> Digital Ocean VPS
 - Memory architecture simplified to SQLite (pip-by-arc-forge pattern)
 - Voice service updated to use Chatterbox (self-hosted STT/TTS)
 
 **In Progress:**
-- Project documentation refresh
+- Epic 1: MCP Server - Solana Blockchain Tools (Feature 1.2)
 
 **Next Up:**
-- [ ] Create GitHub issues for MVP implementation
-- [ ] Begin implementation (MCP server first)
+- [ ] `getTransactionHistory` tool (task_1_2_2)
+- [ ] `prepareTransaction` tool (task_1_2_3)
+- [ ] Star Atlas Fleet Tools (Feature 1.3)
 
 ---
 
