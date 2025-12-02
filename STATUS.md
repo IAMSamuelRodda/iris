@@ -38,9 +38,10 @@
   - `getTransactionHistory` tool with pagination support
   - Transaction type inference (SOL/token transfers, program interactions)
   - MVP scope refined (prepareTransaction deferred)
-- Star Atlas Fleet Tools (Feature 1.3) in progress:
+- Star Atlas Fleet Tools (Feature 1.3) complete:
   - `getFleetStatus` MVP: player profile verification
-  - SAGE SDK spike needed for full fleet enumeration
+  - `predictFuelDepletion`: fuel status and recommendations
+  - SAGE SDK spike needed for auto-fetch fleet data
 
 **Completed (2025-12-01):**
 - Vision alignment session (docs/planning-session-2025-11-12.md)
@@ -49,12 +50,12 @@
 - Voice service updated to use Chatterbox (self-hosted STT/TTS)
 
 **In Progress:**
-- Epic 1: MCP Server - Star Atlas Fleet Tools (Feature 1.3)
+- 🔴 **ARCH-001**: IRIS/CITADEL separation (blocking MCP tool development)
 
 **Next Up (MVP scope):**
-- [ ] `predictFuelDepletion` tool (task_1_3_2)
-- [ ] Market Tools: `getTokenPrices`, `getMarketplaceOrders` (Feature 1.4)
-- [ ] SAGE SDK spike for full fleet enumeration
+- [ ] Create CITADEL repo and move blockchain/game tools
+- [ ] IRIS: Focus on voice service (Chatterbox) + user memory
+- [ ] CITADEL: Own all blockchain/game data tools
 
 **Deferred from MVP (2025-12-02):**
 - ⏸️ `prepareTransaction` tool - users execute via Star Atlas UI

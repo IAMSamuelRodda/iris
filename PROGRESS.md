@@ -41,14 +41,15 @@
 
 > **Note**: task_1_2_3 deferred from MVP - users check status via voice, execute via Star Atlas UI
 
-### Feature 1.3: Star Atlas Fleet Tools (5 days MVP)
+### Feature 1.3: Star Atlas Fleet Tools (5 days MVP) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_1_3_1 | Implement getFleetStatus tool | 3.0 | 3d | 🟡 MVP |
-| task_1_3_2 | Implement predictFuelDepletion tool | 2.8 | 2d | 🔴 |
+| task_1_3_2 | Implement predictFuelDepletion tool | 2.8 | 2d | 🟢 |
 | task_1_3_3 | Implement subscribeToFleetUpdates WebSocket | **3.5** ⚠️ | 2d | ⏸️ DEFERRED |
 
 > **Note**: task_1_3_1 MVP implementation verifies player profile; full fleet enumeration needs SAGE SDK spike
+> **Note**: task_1_3_2 works with user-provided data; auto-fetch after SAGE SDK integration
 > **Note**: task_1_3_3 deferred from MVP - use polling (getFleetStatus on 30-60s interval) instead
 
 ### Feature 1.4: Market & Economic Tools (4 days)

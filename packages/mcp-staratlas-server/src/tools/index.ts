@@ -11,6 +11,10 @@ import {
   getTransactionHistorySchema,
 } from "./transactions.js";
 import { getFleetStatus, getFleetStatusSchema } from "./fleet.js";
+import {
+  predictFuelDepletion,
+  predictFuelDepletionSchema,
+} from "./fuel.js";
 import { ToolError } from "../errors.js";
 
 // Tool definitions for MCP protocol
@@ -33,6 +37,12 @@ export const tools: Tool[] = [
       "Check Star Atlas SAGE player profile and fleet status for a wallet address. Verifies if the wallet has a SAGE profile. MVP: Returns profile verification; full fleet data requires SAGE SDK integration.",
     inputSchema: getFleetStatusSchema,
   },
+  {
+    name: "predictFuelDepletion",
+    description:
+      "Calculate when a Star Atlas fleet will run out of fuel based on current fuel levels and consumption rate. Returns time until empty, fuel status (critical/low/moderate/good/full), and recommendations.",
+    inputSchema: predictFuelDepletionSchema,
+  },
 ];
 
 // Tool name to handler mapping
@@ -43,6 +53,7 @@ const toolHandlers: Record<
   getWalletBalance,
   getTransactionHistory,
   getFleetStatus,
+  predictFuelDepletion,
 };
 
 /**

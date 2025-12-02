@@ -311,16 +311,65 @@ IRIS Provides:
 
 ---
 
+## Architectural Issues
+
+### ARCH-001: IRIS/CITADEL Separation of Concerns
+**Severity**: 🔴 Critical | **Created**: 2025-12-02
+
+**Issue**: IRIS MCP server currently contains blockchain/game data tools that belong in CITADEL.
+
+**Current State**:
+The `mcp-staratlas-server` package contains tools that should be CITADEL's responsibility:
+- `getWalletBalance` - Solana RPC query
+- `getTransactionHistory` - Solana RPC query
+- `getFleetStatus` - SAGE SDK integration
+- `predictFuelDepletion` - Game calculation with on-chain formulas
+
+**Correct Separation**:
+
+| Responsibility | CITADEL | IRIS |
+|----------------|---------|------|
+| Blockchain data (fleets, prices, txns) | ✅ | ❌ |
+| Game calculations (fuel, ROI, profit) | ✅ | ❌ |
+| SAGE SDK / Solana RPC integration | ✅ | ❌ |
+| Galactic data cache (ship stats, formulas) | ✅ | ❌ |
+| Voice interface (STT/TTS) | ❌ | ✅ |
+| User memory/preferences | ❌ | ✅ |
+| Session context | ❌ | ✅ |
+| CITADEL API proxy | ❌ | ✅ |
+
+**Decision**: Move blockchain/game tools to CITADEL repository.
+
+**Detailed Design**: See `citadel/docs/architecture/iris-citadel-separation.md`
+
+**Action Items**:
+1. [ ] Create CITADEL repository with MCP server package
+2. [ ] Move `getWalletBalance`, `getTransactionHistory`, `getFleetStatus`, `predictFuelDepletion` to CITADEL
+3. [ ] Implement "Galactic Data Service" pattern in CITADEL for cached game data
+4. [ ] Update IRIS to proxy to CITADEL APIs (Epic 8)
+5. [ ] Remove or stub IRIS MCP tools that duplicate CITADEL functionality
+
+**Why This Matters**:
+- Game formulas are on-chain (SAGE program) - hardcoding them in IRIS will break when Star Atlas updates
+- CITADEL should own the "source of truth" for all blockchain/game data
+- IRIS should be a thin voice layer + user context, not a data service
+- Prevents duplicate RPC costs and inconsistent caching strategies
+
+**Status**: 🔴 Open - Blocking further MCP tool development in IRIS
+
+---
+
 ## Action Items
 
-1. [ ] **Create spike blueprint** for Chatterbox integration
-2. [x] **Decompose task_1_2_3** (prepareTransaction) - DONE, DEFERRED from MVP (2025-12-02)
-3. [x] **Decompose task_1_3_3** (subscribeToFleetUpdates) - DONE, DEFERRED from MVP (2025-12-02)
-4. [x] **Decompose task_4_3_3** (latency monitoring) - DONE, partial MVP scope (2025-12-02)
-5. [ ] **Set up monitoring** for external API availability
-6. [ ] **Coordinate with CITADEL** on API timeline and contract validation
-7. [ ] **Create mock API** responses for CITADEL endpoints (task_8_1_3)
-8. [ ] **Spike ASP-001** after CITADEL historical data available (assess prediction feasibility)
+1. [ ] **ARCH-001**: Create CITADEL repo and move blockchain/game tools (BLOCKING)
+2. [ ] **Create spike blueprint** for Chatterbox integration
+3. [x] **Decompose task_1_2_3** (prepareTransaction) - DONE, DEFERRED from MVP (2025-12-02)
+4. [x] **Decompose task_1_3_3** (subscribeToFleetUpdates) - DONE, DEFERRED from MVP (2025-12-02)
+5. [x] **Decompose task_4_3_3** (latency monitoring) - DONE, partial MVP scope (2025-12-02)
+6. [ ] **Set up monitoring** for external API availability
+7. [ ] **Coordinate with CITADEL** on API timeline and contract validation
+8. [ ] **Create mock API** responses for CITADEL endpoints (task_8_1_3)
+9. [ ] **Spike ASP-001** after CITADEL historical data available (assess prediction feasibility)
 
 ## MVP Scope Decisions (2025-12-02)
 
@@ -330,6 +379,7 @@ IRIS Provides:
 | **DEFER WebSocket subscriptions** | Use polling (30-60s) for MVP; near real-time is sufficient |
 | **SKIP traditional CI/CD** | Main-only workflow; deploy via `docker-compose` on VPS |
 | **Text-only fallback default** | Voice is aspirational for MVP; must work without it |
+| **MOVE blockchain tools to CITADEL** | IRIS is voice layer; CITADEL owns game data (ARCH-001) |
 
 ---
 
