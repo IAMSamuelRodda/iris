@@ -14,8 +14,19 @@
  * - "verbose": Detailed thinking feedback throughout
  */
 
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { type VoiceStyleId, getVoiceStyle } from "./voice-styles.js";
+
+// Singleton Anthropic client for fast acknowledgments
+// Uses direct API instead of Agent SDK for minimal latency (~100ms vs ~5s)
+let anthropicClient: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  if (!anthropicClient) {
+    anthropicClient = new Anthropic();
+  }
+  return anthropicClient;
+}
 
 // ============================================================================
 // Configuration
@@ -86,30 +97,20 @@ export async function generateQuickAcknowledgment(
   const prompt = buildUserPrompt(userMessage, config.recentContext);
 
   try {
-    // Use Agent SDK query() - same pattern as main agent, different model
-    const stream = query({
-      prompt,
-      options: {
-        model: HAIKU_MODEL,
-        systemPrompt,
-        permissionMode: "bypassPermissions",
-        // No MCP servers, no tools - pure speed for acknowledgments
-      },
+    // Use direct Anthropic API for minimum latency (~100ms vs ~5s with Agent SDK)
+    const client = getAnthropicClient();
+    const response = await client.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 100, // Short acknowledgments only
+      system: systemPrompt,
+      messages: [{ role: "user", content: prompt }],
     });
 
-    // Collect the response (non-streaming for speed)
+    // Extract text from response
     let responseText = "";
-    for await (const msg of stream) {
-      if (msg.type === "assistant") {
-        // Extract text from assistant message
-        const content = (msg as { message?: { content?: Array<{ type: string; text?: string }> } }).message?.content;
-        if (content) {
-          for (const block of content) {
-            if (block.type === "text" && block.text) {
-              responseText += block.text;
-            }
-          }
-        }
+    for (const block of response.content) {
+      if (block.type === "text") {
+        responseText += block.text;
       }
     }
 
@@ -158,6 +159,9 @@ export function needsAcknowledgment(userMessage: string, voiceStyle: VoiceStyleI
 /**
  * Get a pre-canned acknowledgment for common patterns.
  * Faster than calling Haiku when pattern is clear.
+ *
+ * NOTE: Pattern-based fallbacks are ~4ms vs Haiku ~1.7-2.7s.
+ * We intentionally cast a wide net here to maximize instant responses.
  */
 export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId): QuickAcknowledgment | null {
   const style = getVoiceStyle(voiceStyle);
@@ -166,9 +170,9 @@ export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId):
     return null;
   }
 
-  // Pattern-based fallbacks for common requests
-  const lowerMessage = userMessage.toLowerCase();
+  const lowerMessage = userMessage.toLowerCase().trim();
 
+  // Star Atlas specific patterns
   if (lowerMessage.includes("fleet") || lowerMessage.includes("ship")) {
     return {
       text: "Checking your fleet status.",
@@ -178,7 +182,7 @@ export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId):
     };
   }
 
-  if (lowerMessage.includes("wallet") || lowerMessage.includes("balance")) {
+  if (lowerMessage.includes("wallet") || lowerMessage.includes("balance") || lowerMessage.includes("account")) {
     return {
       text: "Let me check that for you.",
       intent: "command",
@@ -187,7 +191,42 @@ export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId):
     };
   }
 
-  if (lowerMessage.includes("help") || lowerMessage.includes("how do")) {
+  if (lowerMessage.includes("market") || lowerMessage.includes("price") || lowerMessage.includes("trade")) {
+    return {
+      text: "Looking up the market data.",
+      intent: "command",
+      needsFollowUp: true,
+    };
+  }
+
+  if (lowerMessage.includes("mission") || lowerMessage.includes("quest") || lowerMessage.includes("task")) {
+    return {
+      text: "Let me check on that.",
+      intent: "command",
+      needsFollowUp: true,
+    };
+  }
+
+  // Question patterns (wide net for questions)
+  if (/^(what|where|when|why|who|how|can you|could you|would you|will you|is there|are there|do you|does|did)/i.test(lowerMessage)) {
+    return {
+      text: "Let me look into that.",
+      intent: "question",
+      needsFollowUp: true,
+    };
+  }
+
+  // Request patterns
+  if (/^(tell me|show me|give me|explain|describe|find|search|look up|get me|list)/i.test(lowerMessage)) {
+    return {
+      text: "Sure, one moment.",
+      intent: "command",
+      needsFollowUp: true,
+    };
+  }
+
+  // Help patterns
+  if (lowerMessage.includes("help") || lowerMessage.includes("how do") || lowerMessage.includes("how can i")) {
     return {
       text: "Sure, I can help with that.",
       intent: "question",
@@ -195,7 +234,35 @@ export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId):
     };
   }
 
-  // No clear pattern - let Haiku handle it
+  // Action patterns
+  if (/^(do|make|create|build|start|stop|enable|disable|turn|set|change|update)/i.test(lowerMessage)) {
+    return {
+      text: "On it.",
+      intent: "command",
+      needsFollowUp: true,
+    };
+  }
+
+  // Status/update patterns
+  if (lowerMessage.includes("status") || lowerMessage.includes("update") || lowerMessage.includes("progress")) {
+    return {
+      text: "Checking the status now.",
+      intent: "command",
+      needsFollowUp: true,
+    };
+  }
+
+  // Fallback: Any message over 10 chars that didn't match gets a generic acknowledgment
+  // This catches most real queries while skipping noise
+  if (lowerMessage.length > 10) {
+    return {
+      text: "Got it, working on that.",
+      intent: "unclear",
+      needsFollowUp: true,
+    };
+  }
+
+  // Short messages with no clear pattern - let Haiku handle
   return null;
 }
 

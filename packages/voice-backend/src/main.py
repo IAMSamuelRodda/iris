@@ -10,8 +10,34 @@ Usage:
 
 import io
 import logging
+import os
+import sys
 from contextlib import asynccontextmanager
 from typing import Literal
+
+# =============================================================================
+# CUDA/cuDNN Library Path Fix
+#
+# ctranslate2 (used by faster-whisper) requires cuDNN libraries to be in
+# LD_LIBRARY_PATH. PyTorch bundles cuDNN in nvidia-cudnn package but doesn't
+# add it to the library path. This fix adds it automatically.
+# =============================================================================
+def _setup_cudnn_path():
+    """Add nvidia-cudnn lib to LD_LIBRARY_PATH for ctranslate2 compatibility."""
+    try:
+        import nvidia.cudnn
+        cudnn_lib = os.path.join(os.path.dirname(nvidia.cudnn.__file__), "lib")
+        if os.path.exists(cudnn_lib):
+            current_path = os.environ.get("LD_LIBRARY_PATH", "")
+            if cudnn_lib not in current_path:
+                os.environ["LD_LIBRARY_PATH"] = f"{cudnn_lib}:{current_path}"
+                # Also need to update ctypes search path for already-loaded process
+                import ctypes
+                ctypes.CDLL(os.path.join(cudnn_lib, "libcudnn.so.9"), mode=ctypes.RTLD_GLOBAL)
+    except ImportError:
+        pass  # nvidia-cudnn not installed, skip
+
+_setup_cudnn_path()
 
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -20,8 +46,11 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from scipy.io import wavfile
 
+from fastapi import WebSocket
+
 from .stt import ModelSize, SpeechToText, get_stt
 from .tts import TextToSpeech, get_tts
+from .websocket import get_voice_handler
 
 # Configure logging
 logging.basicConfig(
@@ -31,13 +60,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration from environment
-import os
-
 STT_MODEL_SIZE: ModelSize = os.getenv("STT_MODEL_SIZE", "base")  # type: ignore
-# Separate devices for STT and TTS to avoid cuDNN issues with faster-whisper
-# STT uses CPU (int8 is already fast, ~1-2s for short utterances)
-# TTS uses CUDA (Chatterbox with PyTorch works fine with GPU)
-STT_DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("STT_DEVICE", "cpu")  # type: ignore
+# Both STT and TTS can now use CUDA thanks to the cuDNN path fix above
+# Set STT_DEVICE=cuda for ~32% faster transcription (181ms vs 266ms)
+STT_DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("STT_DEVICE", "cuda")  # type: ignore
 TTS_DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("TTS_DEVICE", "cuda")  # type: ignore
 PRELOAD_MODELS = os.getenv("PRELOAD_MODELS", "false").lower() == "true"
 
@@ -246,6 +272,35 @@ async def synthesize_speech_streaming(request: SynthesizeRequest):
     except Exception as e:
         logger.exception("Streaming synthesis failed")
         raise HTTPException(status_code=500, detail=f"Synthesis failed: {e}")
+
+
+# ==============================================================================
+# WebSocket Endpoint (Direct browser connection - eliminates Node.js relay)
+# ==============================================================================
+
+
+@app.websocket("/ws/voice")
+async def voice_websocket(websocket: WebSocket):
+    """
+    Direct WebSocket connection for voice interaction.
+
+    This endpoint eliminates the Node.js voice-service relay,
+    reducing latency by ~40-80ms (4 fewer network hops).
+
+    Protocol:
+    1. Client connects with ?userId=xxx query param
+    2. Server sends {"type": "ready"}
+    3. Client sends audio_start/audio_chunk/audio_end for STT
+    4. Server sends {"type": "transcription", "text": "..."}
+    5. Client sends {"type": "synthesize", "text": "..."}
+    6. Server streams audio_start/audio_chunk/audio_end for TTS
+    """
+    handler = get_voice_handler(
+        stt_model_size=STT_MODEL_SIZE,
+        stt_device=STT_DEVICE,
+        tts_device=TTS_DEVICE,
+    )
+    await handler.handle_connection(websocket)
 
 
 # ==============================================================================

@@ -229,14 +229,17 @@ export function Chat() {
   };
 
   // Voice recording toggle
+  // On first click: connect AND start recording (eliminates double-click on first use)
   const toggleRecording = async () => {
     const client = voiceClientRef.current;
     if (!client) return;
 
     try {
-      if (voiceState === "idle") {
-        await client.connect();
-      } else if (voiceState === "ready") {
+      if (voiceState === "idle" || voiceState === "ready") {
+        // Connect if needed, then start recording
+        if (!client.isConnected()) {
+          await client.connect();
+        }
         await client.startRecording();
       } else if (voiceState === "recording") {
         client.stopRecording();
@@ -250,11 +253,10 @@ export function Chat() {
   const getVoiceButtonLabel = () => {
     switch (voiceState) {
       case "idle":
-        return "Connect";
+      case "ready":
+        return "🎤";
       case "connecting":
         return "...";
-      case "ready":
-        return "Speak";
       case "recording":
         return "Stop";
       case "processing":

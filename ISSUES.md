@@ -313,6 +313,51 @@ IRIS Provides:
 
 ## Architectural Issues
 
+### ARCH-003: Voice Pipeline Architecture Overhead (12 Network Hops)
+**Severity**: 🔴 Critical | **Created**: 2025-12-03 | **Updated**: 2025-12-03
+
+**Issue**: The voice pipeline has excessive architecture overhead - 12 network crossings, 11 serialization boundaries, 4 language boundaries, and ~76% encoding overhead from base64.
+
+**Current Architecture (problematic)**:
+```
+Browser → WS → Node.js(voice-service) → HTTP → Python(STT) → HTTP →
+Node.js → WS → Browser → HTTP → Node.js(agent) → HTTP/2 → Claude →
+SSE → Node.js → SSE → Browser → WS → Node.js → HTTP → Python(TTS) →
+HTTP → Node.js → WS(base64) → Browser
+```
+
+**Quantified Overhead**:
+| Category | Count | Impact |
+|----------|-------|--------|
+| Network crossings | 12 | ~60-360ms (5-30ms each) |
+| Serialization boundaries | 11 | ~76% data overhead |
+| Language boundaries | 4 | JSON encode/decode each |
+| Base64 encoding | 2x | +33% audio size each way |
+
+**Target Architecture (minimal)**:
+```
+Browser ←WebSocket(binary)→ Python Gateway ←HTTP/2→ Claude API
+```
+- **3 network hops** (vs 12)
+- **Binary WebSocket** (no base64)
+- **One service** (eliminates Node.js voice-service entirely)
+
+**Implementation Plan**:
+
+| Phase | Description | Savings | Status |
+|-------|-------------|---------|--------|
+| **Phase 1**: Kill Node.js voice-service | Direct Browser → Python WebSocket | ~40-80ms | 🔴 |
+| **Phase 2**: Binary WebSocket frames | Raw PCM instead of base64 | ~30-50ms | 🔴 |
+| **Phase 3**: Streaming STT | Process during recording | ~50-100ms | 🔴 |
+| **Phase 4**: GPU STT | faster-whisper on CUDA | ~100-200ms | 🔴 |
+| **Phase 5**: Plan Rust gateway | Future optimization | TBD | 🔴 |
+
+**Detailed Investigation**: See Joplin note "IRIS Voice Latency Deep Dive (2025-12-03)"
+
+**Status**: 🔴 Active - planning session initiated
+
+---
+
 ### ARCH-002: Voice Latency Exceeds Natural Conversation Threshold
 **Severity**: 🔴 Critical | **Created**: 2025-12-02 | **Updated**: 2025-12-02
 

@@ -1,14 +1,20 @@
 # IRIS Docker Compose
 #
 # Services:
-# - voice-backend: Python FastAPI (STT + TTS)
-# - voice-service: Node.js WebSocket bridge
-# - agent-core: Claude Agent SDK (TODO)
+# - voice-backend: Python FastAPI (STT + TTS + WebSocket)
+# - voice-service: [DEPRECATED] Node.js WebSocket bridge (use voice-backend WS)
+# - agent-core: Claude Agent SDK
 # - web-app: React frontend (TODO)
 #
-# Usage:
-#   docker compose up -d voice-backend voice-service
-#   docker compose logs -f
+# Usage (recommended - direct connection):
+#   docker compose up -d voice-backend agent-core
+#   # Browser connects to ws://localhost:8001/ws/voice
+#
+# Usage (legacy - with Node.js bridge):
+#   docker compose up -d voice-backend voice-service agent-core
+#   # Browser connects to ws://localhost:8002
+#
+# See: specs/PLAN-voice-latency-optimization.md for architecture details
 
 version: "3.8"
 
@@ -48,8 +54,15 @@ services:
       - iris-network
 
   # ===========================================================================
-  # Voice Service (Node.js)
+  # Voice Service (Node.js) - DEPRECATED
   # WebSocket bridge between browser and voice-backend
+  #
+  # NOTE: This service is deprecated. Use voice-backend WebSocket directly:
+  #   ws://localhost:8001/ws/voice
+  #
+  # This service adds 4 unnecessary network hops and ~40-80ms latency.
+  # Kept for backward compatibility testing only.
+  # Will be removed after Phase 1 verification.
   # ===========================================================================
   voice-service:
     build:

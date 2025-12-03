@@ -97,7 +97,8 @@ export class IrisAgent {
 
   constructor(config: IrisAgentConfig) {
     this.config = {
-      model: "claude-sonnet-4-5-20250929",
+      // Use Haiku for testing to save costs (switch back to Sonnet for production)
+      model: "claude-haiku-4-5-20251001",
       ...config,
     };
     this.currentSessionId = config.sessionId;
@@ -106,12 +107,21 @@ export class IrisAgent {
   /**
    * Send a message and stream the response.
    * Yields chunks as they arrive for real-time display.
+   *
+   * IMPORTANT: Acknowledgment is yielded IMMEDIATELY (before waiting for prompt).
+   * This is critical for voice latency - user gets feedback in <100ms while
+   * the slower memory/prompt building happens in the background.
    */
   async *chat(message: string): AsyncGenerator<StreamChunk> {
     const voiceStyleId = this.config.voiceStyle || "normal";
+    const wantsAcknowledgment = needsAcknowledgment(message, voiceStyleId);
 
-    // Fast layer: Generate quick acknowledgment if needed
-    if (needsAcknowledgment(message, voiceStyleId)) {
+    // Start prompt building in background (don't await yet)
+    const promptPromise = this.buildPromptWithContext();
+
+    // Get acknowledgment FIRST and yield immediately
+    // Pattern-based fallbacks are instant (<1ms), Haiku is ~50ms
+    if (wantsAcknowledgment) {
       const acknowledgment = await this.getAcknowledgment(message);
       if (acknowledgment) {
         yield {
@@ -122,7 +132,8 @@ export class IrisAgent {
       }
     }
 
-    const systemPrompt = await this.buildPromptWithContext();
+    // Now wait for prompt building to complete
+    const systemPrompt = await promptPromise;
 
     // Record user message in conversation history
     addConversationMessage(this.config.userId, "user", message);
