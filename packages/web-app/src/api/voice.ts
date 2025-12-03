@@ -61,7 +61,6 @@ export class VoiceClient {
   private binaryMode: boolean; // Use binary protocol for lower overhead
 
   // Streaming audio capture (Phase 3)
-  private streamingCapture: boolean = true; // Use real-time PCM streaming
   private captureStream: MediaStream | null = null;
   private captureSource: MediaStreamAudioSourceNode | null = null;
   private captureProcessor: ScriptProcessorNode | null = null;
@@ -301,6 +300,41 @@ export class VoiceClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  /**
+   * Stop all audio playback immediately.
+   * Clears the audio queue and resets to ready state.
+   */
+  stopAudio(): void {
+    console.log("[Voice] Stopping audio playback");
+
+    // Close and recreate playback context to stop all scheduled audio
+    if (this.playbackContext) {
+      this.playbackContext.close().catch(() => {});
+      this.playbackContext = null;
+    }
+
+    // Reset playback timing
+    this.nextPlayTime = 0;
+
+    // Clear pending synthesis
+    this.pendingSynthesisText = null;
+
+    // Return to ready state if we were speaking
+    if (this.state === "speaking") {
+      this.setState("ready");
+    }
+  }
+
+  /**
+   * Stop everything - audio, recording, and reset state.
+   * Use this for full interrupt (e.g., Escape key).
+   */
+  interruptAll(): void {
+    console.log("[Voice] Full interrupt");
+    this.stopRecording();
+    this.stopAudio();
+  }
+
   // Private methods
 
   private setState(state: VoiceState): void {
@@ -343,7 +377,7 @@ export class VoiceClient {
     if (data.byteLength < 2) return;
 
     const msgType = view.getUint8(0);
-    const flags = view.getUint8(1);
+    // Byte 1 is flags (IS_FINAL, NEEDS_FOLLOWUP) - reserved for future use
     const payload = data.byteLength > 2 ? new Uint8Array(data, 2) : null;
 
     switch (msgType) {
@@ -443,29 +477,6 @@ export class VoiceClient {
     }
   }
 
-  private async convertToPCM(blob: Blob): Promise<ArrayBuffer> {
-    if (!this.audioContext) {
-      throw new Error("No audio context");
-    }
-
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-
-    // Get raw PCM data (Float32)
-    const channelData = audioBuffer.getChannelData(0);
-
-    // Convert to Int16 PCM
-    const pcmBuffer = new ArrayBuffer(channelData.length * 2);
-    const pcmView = new DataView(pcmBuffer);
-
-    for (let i = 0; i < channelData.length; i++) {
-      const sample = Math.max(-1, Math.min(1, channelData[i]));
-      pcmView.setInt16(i * 2, sample * 32767, true);
-    }
-
-    return pcmBuffer;
-  }
-
   /**
    * Play audio from base64-encoded PCM data (JSON mode).
    */
@@ -531,4 +542,68 @@ export class VoiceClient {
     // Update next play time for subsequent chunks
     this.nextPlayTime += audioBuffer.duration;
   }
+}
+
+// =============================================================================
+// Voice Management API (HTTP calls to voice-backend)
+// =============================================================================
+
+const VOICE_API_URL = import.meta.env.VITE_VOICE_API_URL || "http://localhost:8001";
+
+export interface VoicesResponse {
+  voices: string[];
+  current: string;
+}
+
+export interface VoiceSelectResponse {
+  success: boolean;
+  voice: string;
+  message: string;
+}
+
+export interface WarmupResponse {
+  ready: boolean;
+  voice: string;
+  warmup_time_ms: number;
+}
+
+/**
+ * Get list of available TTS voices.
+ */
+export async function getAvailableVoices(): Promise<VoicesResponse> {
+  const response = await fetch(`${VOICE_API_URL}/api/voices`);
+  if (!response.ok) {
+    throw new Error(`Failed to get voices: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Select a voice and warm it up.
+ * This may take a few seconds on first use.
+ */
+export async function selectVoice(voiceName: string): Promise<VoiceSelectResponse> {
+  const response = await fetch(`${VOICE_API_URL}/api/voice/select`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voice: voiceName }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || `Failed to select voice: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Warmup the current voice (call on app startup).
+ */
+export async function warmupVoice(): Promise<WarmupResponse> {
+  const response = await fetch(`${VOICE_API_URL}/api/warmup`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to warmup: ${response.statusText}`);
+  }
+  return response.json();
 }

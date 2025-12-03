@@ -143,113 +143,139 @@
 
 ---
 
-## Epic 4: Voice Service - Chatterbox STT/TTS Integration
+## Epic 4: Voice Service - STT/TTS Integration
 
-**Estimated**: 18 days | **Status**: 🔴
+**Estimated**: 18 days | **Status**: 🟢
 
-### Feature 4.1: Chatterbox Installation (4 days) 🔍
+> **Implementation**: Python FastAPI backend with faster-whisper (STT) + Kokoro-82M (TTS)
+> **Architecture**: Browser → WebSocket (binary) → Python backend (no Node.js bridge)
+> **Location**: `packages/voice-backend/`
+> **TTS Update (2025-12-03)**: Switched from Chatterbox to Kokoro-82M for 12x faster synthesis (42ms vs 500ms)
+
+### Feature 4.1: Voice Backend Setup (4 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_4_1_1 | Deploy Chatterbox Docker container | 2.8 | 2d | 🔍 |
-| task_4_1_2 | Configure Chatterbox models | 2.2 | 2d | 🔍 |
+| task_4_1_1 | Deploy voice-backend Docker container | 2.8 | 2d | 🟢 |
+| task_4_1_2 | Configure faster-whisper + Kokoro models | 2.2 | 2d | 🟢 |
 
-**⚠️ NEEDS SPIKE**: Chatterbox deployment patterns unclear - see ISSUES.md
+> **Note**: Using faster-whisper for STT (181ms GPU), Kokoro-82M for TTS (42ms GPU, 11 voices).
 
-### Feature 4.2: WebRTC Signaling Server (5 days)
+### Feature 4.2: WebSocket Voice Server (5 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_4_2_1 | Implement WebSocket server | 2.5 | 2d | 🔴 |
-| task_4_2_2 | Add peer connection management | 3.0 | 2d | 🔴 |
-| task_4_2_3 | Implement connection recovery | 2.8 | 1d | 🔴 |
+| task_4_2_1 | Implement WebSocket server (Python) | 2.5 | 2d | 🟢 |
+| task_4_2_2 | Binary protocol (2-byte header + PCM) | 3.0 | 2d | 🟢 |
+| task_4_2_3 | Implement connection recovery | 2.8 | 1d | 🟢 |
 
-### Feature 4.3: Audio Streaming Pipeline (5 days MVP)
+> **Note**: WebRTC replaced with direct WebSocket. Node.js voice-service deprecated.
+
+### Feature 4.3: Audio Streaming Pipeline (5 days MVP) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_4_3_1 | Implement audio capture to STT | 3.0 | 2d | 🔴 |
-| task_4_3_2 | Implement TTS response streaming | 3.2 | 2d | 🔴 |
-| task_4_3_3 | Add latency monitoring | **3.5** ⚠️ | 1.5d | 🟡 Partial |
+| task_4_3_1 | Implement audio capture to STT | 3.0 | 2d | 🟢 |
+| task_4_3_2 | Implement TTS response streaming | 3.2 | 2d | 🟢 |
+| task_4_3_3 | Add latency monitoring | **3.5** ⚠️ | 1.5d | 🟢 |
 
-> **Note**: task_4_3_3 partial MVP scope - instrumentation + logging + fallback only (1.5d); optimization deferred
+> **Latency achieved**: STT 181ms (GPU), TTS 520ms (GPU), Fast-layer ack 3-12ms
+> **Benchmark**: `packages/voice-backend/test_e2e_latency_v3.py`
 
-### Feature 4.4: Voice Service API (3 days)
+### Feature 4.4: Voice Service API (3 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_4_4_1 | Create voice session endpoints | 1.8 | 1.5d | 🔴 |
-| task_4_4_2 | Add Agent Core integration | 2.2 | 1.5d | 🔴 |
+| task_4_4_1 | Create voice session endpoints | 1.8 | 1.5d | 🟢 |
+| task_4_4_2 | Add Agent Core integration | 2.2 | 1.5d | 🟢 |
 
 ---
 
 ## Epic 5: Web Application - React Frontend
 
-**Estimated**: 20 days | **Status**: 🔴
+**Estimated**: 20 days | **Status**: 🟡 (Core complete, Auth & Dashboard pending)
 
-### Feature 5.1: React + Vite Setup (2 days)
+> **Implementation**: React 18 + TypeScript + Vite
+> **Location**: `packages/web-app/`
+
+### Feature 5.1: React + Vite Setup (2 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_5_1_1 | Initialize Vite project | 1.3 | 1d | 🔴 |
-| task_5_1_2 | Configure routing | 1.7 | 1d | 🔴 |
+| task_5_1_1 | Initialize Vite project | 1.3 | 1d | 🟢 |
+| task_5_1_2 | Configure routing | 1.7 | 1d | 🟢 |
 
-### Feature 5.2: Authentication UI (4 days)
+### Feature 5.2: Authentication UI (4 days) 🔴
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_5_2_1 | Create magic link form | 1.8 | 1.5d | 🔴 |
 | task_5_2_2 | Implement JWT handling | 2.3 | 1.5d | 🔴 |
 | task_5_2_3 | Add wallet connection | 2.5 | 1d | 🔴 |
 
-### Feature 5.3: Voice Interaction UI (5 days)
+> **Note**: Auth deferred for MVP - single-user local development first
+
+### Feature 5.3: Voice Interaction UI (5 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_5_3_1 | Create push-to-talk button | 2.0 | 1.5d | 🔴 |
-| task_5_3_2 | Implement useVoice hook | 2.8 | 2d | 🔴 |
+| task_5_3_1 | Create push-to-talk button | 2.0 | 1.5d | 🟢 |
+| task_5_3_2 | Implement VoiceClient class | 2.8 | 2d | 🟢 |
 | task_5_3_3 | Add audio waveform visualization | 2.7 | 1.5d | 🔴 |
 
-### Feature 5.4: Chat Interface (4 days)
+> **Implemented**: `src/api/voice.ts` - VoiceClient with binary WebSocket, audio queue, PTT
+
+### Feature 5.4: Chat Interface (4 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_5_4_1 | Create message list component | 1.8 | 1.5d | 🔴 |
-| task_5_4_2 | Add text input fallback | 1.7 | 1.5d | 🔴 |
-| task_5_4_3 | Implement streaming message display | 2.5 | 1d | 🔴 |
+| task_5_4_1 | Create message list component | 1.8 | 1.5d | 🟢 |
+| task_5_4_2 | Add text input fallback | 1.7 | 1.5d | 🟢 |
+| task_5_4_3 | Implement streaming message display | 2.5 | 1d | 🟢 |
 
-### Feature 5.5: Fleet Status Dashboard (5 days)
+> **Implemented**: `src/components/Chat.tsx`, `Message.tsx` - SSE streaming, voice styles selector
+
+### Feature 5.5: Fleet Status Dashboard (5 days) 🔴
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_5_5_1 | Create fleet card component | 2.0 | 2d | 🔴 |
 | task_5_5_2 | Add real-time fleet updates | 2.7 | 2d | 🔴 |
 | task_5_5_3 | Implement alert notifications | 2.2 | 1d | 🔴 |
 
+> **Note**: Dashboard deferred - blocked on CITADEL API (Epic 8)
+
 ---
 
 ## Epic 6: Deployment & Infrastructure
 
-**Estimated**: 14 days | **Status**: 🔴
+**Estimated**: 14 days | **Status**: 🟡 (Docker complete, VPS pending)
 
-### Feature 6.1: Docker Compose Configuration (4 days)
+> **Current state**: Local Docker development working, VPS deployment not started
+
+### Feature 6.1: Docker Compose Configuration (4 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_6_1_1 | Create Dockerfiles | 2.0 | 2d | 🔴 |
-| task_6_1_2 | Write docker-compose.yml | 2.5 | 1.5d | 🔴 |
-| task_6_1_3 | Add SQLite volume mounts | 2.3 | 0.5d | 🔴 |
+| task_6_1_1 | Create Dockerfiles | 2.0 | 2d | 🟢 |
+| task_6_1_2 | Write docker-compose.yml | 2.5 | 1.5d | 🟢 |
+| task_6_1_3 | Add volume mounts | 2.3 | 0.5d | 🟢 |
 
-### Feature 6.2: Caddy Reverse Proxy Integration (3 days)
+> **Implemented**: Dockerfiles for voice-backend, voice-service (deprecated), agent-core
+> **docker-compose.yml**: Services configured with health checks, networks, volumes
+
+### Feature 6.2: Caddy Reverse Proxy Integration (3 days) 🔴
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_6_2_1 | Update Caddyfile | 1.8 | 1d | 🔴 |
 | task_6_2_2 | Configure HTTPS | 2.2 | 1.5d | 🔴 |
 | task_6_2_3 | Test routing | 2.0 | 0.5d | 🔴 |
 
-### Feature 6.3: VPS Deployment (4 days)
+### Feature 6.3: VPS Deployment (4 days) 🔴
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_6_3_1 | Create deployment script | 2.3 | 2d | 🔴 |
 | task_6_3_2 | Configure secrets management | 2.5 | 1.5d | 🔴 |
 | task_6_3_3 | Verify VPS performance | 2.7 | 0.5d | 🔴 |
 
-### Feature 6.4: Monitoring & Logging (3 days)
+### Feature 6.4: Monitoring & Logging (3 days) 🟡
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_6_4_1 | Configure Docker logging | 1.7 | 1.5d | 🔴 |
-| task_6_4_2 | Add health check endpoints | 1.8 | 1d | 🔴 |
+| task_6_4_1 | Configure Docker logging | 1.7 | 1.5d | 🟢 |
+| task_6_4_2 | Add health check endpoints | 1.8 | 1d | 🟢 |
 | task_6_4_3 | Set up Caddy access logs | 1.8 | 0.5d | 🔴 |
+
+> **Implemented**: Docker health checks in docker-compose.yml
 
 ---
 
@@ -366,19 +392,20 @@
 
 ## Summary
 
-| Epic | Features | Tasks | Est. Days | Status | MVP Scope |
-|------|----------|-------|-----------|--------|-----------|
-| MCP Server | 4 | 11 | 21 → **17** | 🟡 | 2 tasks deferred |
-| Memory Service | 4 | 10 | 13 | 🔴 | Full |
-| Agent Core | 4 | 9 | 15 | 🔴 | Full |
-| Voice Service | 4 | 10 | 18 → **17.5** | 🔴 | Latency opt. deferred |
-| Web Application | 5 | 13 | 20 | 🔴 | Full |
-| Deployment | 4 | 10 | 14 | 🔴 | Full (no CI/CD) |
-| Testing | 3 | 9 | 15 | 🔴 | Full |
+| Epic | Features | Tasks | Est. Days | Status | Notes |
+|------|----------|-------|-----------|--------|-------|
+| MCP Server | 4 | 11 | 17 | 🟡 | 2 tasks deferred |
+| Memory Service | 4 | 10 | 13 | 🟢 | Complete |
+| Agent Core | 4 | 9 | 15 | 🟢 | Complete |
+| Voice Service | 4 | 10 | 18 | 🟢 | Complete (latency optimized) |
+| Web Application | 5 | 13 | 20 | 🟡 | Core done, Auth/Dashboard pending |
+| Deployment | 4 | 10 | 14 | 🟡 | Docker done, VPS pending |
+| Testing | 3 | 9 | 15 | 🔴 | Latency benchmarks only |
 | **CITADEL Integration** | **11** | **35** | **37-40** | 🔴 | Post-MVP |
-| **MVP TOTAL** | **28** | **72** | **~97** | 🟡 | Reduced |
 
-> **MVP Scope Cuts (2025-12-02)**: prepareTransaction, WebSocket subscriptions, latency optimization deferred. CITADEL is post-MVP.
+> **Last Updated**: 2025-12-03
+> **MVP Scope Cuts**: prepareTransaction, WebSocket subscriptions deferred. CITADEL is post-MVP.
+> **Voice latency**: Achieved ~700ms to first audio (target was <500ms)
 
 ---
 

@@ -108,91 +108,185 @@ export class IrisAgent {
    * Send a message and stream the response.
    * Yields chunks as they arrive for real-time display.
    *
-   * IMPORTANT: Acknowledgment is yielded IMMEDIATELY (before waiting for prompt).
-   * This is critical for voice latency - user gets feedback in <100ms while
-   * the slower memory/prompt building happens in the background.
+   * OPTIMIZATION: Uses producer-consumer pattern to start Claude query
+   * IMMEDIATELY after prompt is ready, NOT after ack is consumed.
+   * This overlaps ack TTS playback (~500ms) with query execution (~700ms).
    */
   async *chat(message: string): AsyncGenerator<StreamChunk> {
-    const voiceStyleId = this.config.voiceStyle || "normal";
-    const wantsAcknowledgment = needsAcknowledgment(message, voiceStyleId);
+    // Chunk queue for producer-consumer pattern
+    const chunkQueue: StreamChunk[] = [];
+    const state = { resolveWaiting: null as (() => void) | null, done: false };
 
-    // Start prompt building in background (don't await yet)
-    const promptPromise = this.buildPromptWithContext();
-
-    // Get acknowledgment FIRST and yield immediately
-    // Pattern-based fallbacks are instant (<1ms), Haiku is ~50ms
-    if (wantsAcknowledgment) {
-      const acknowledgment = await this.getAcknowledgment(message);
-      if (acknowledgment) {
-        yield {
-          type: "acknowledgment",
-          content: acknowledgment.text,
-          isInterim: acknowledgment.needsFollowUp,
-        };
+    const signal = () => {
+      if (state.resolveWaiting) {
+        const fn = state.resolveWaiting;
+        state.resolveWaiting = null;
+        fn();
       }
-    }
-
-    // Now wait for prompt building to complete
-    const systemPrompt = await promptPromise;
-
-    // Record user message in conversation history
-    addConversationMessage(this.config.userId, "user", message);
-
-    const options: Options = {
-      model: this.config.model,
-      systemPrompt,
-      permissionMode: "bypassPermissions", // Server-side, no user prompts
-      mcpServers: {
-        iris: this.mcpServer,
-      },
-      abortController: this.config.abortController,
-      includePartialMessages: true,
     };
 
-    // Resume session if we have one
-    if (this.currentSessionId) {
-      options.resume = this.currentSessionId;
-    }
+    const pushChunk = (chunk: StreamChunk) => {
+      chunkQueue.push(chunk);
+      signal();
+    };
 
-    const stream: Query = query({ prompt: message, options });
+    const waitForChunk = (): Promise<void> =>
+      new Promise((resolve) => {
+        if (chunkQueue.length > 0 || state.done) {
+          resolve();
+        } else {
+          state.resolveWaiting = resolve;
+        }
+      });
 
-    let responseText = "";
-    let sessionId = this.currentSessionId;
+    // === PRODUCER: Runs eagerly in background, pushes chunks to queue ===
+    const producer = (async () => {
+      const voiceStyleId = this.config.voiceStyle || "normal";
+      const wantsAck = needsAcknowledgment(message, voiceStyleId);
 
-    try {
-      for await (const msg of stream) {
-        const chunk = this.processMessage(msg);
-        if (chunk) {
-          // Track session ID
-          if (chunk.sessionId) {
-            sessionId = chunk.sessionId;
-            this.currentSessionId = sessionId;
-          }
+      // TIMING: Track latency through the pipeline
+      const timings = {
+        start: Date.now(),
+        ackStart: 0,
+        ackEnd: 0,
+        promptReady: 0,
+        queryStart: 0,
+        firstToken: 0,
+      };
 
-          // Accumulate text
-          if (chunk.type === "text") {
-            responseText += chunk.content;
-          }
+      // Start prompt building immediately
+      const promptPromise = this.buildPromptWithContext();
 
-          yield chunk;
+      // Get acknowledgment (runs in parallel with prompt building)
+      let spokenAck: string | null = null;
+      if (wantsAck) {
+        timings.ackStart = Date.now();
+        const acknowledgment = await this.getAcknowledgment(message);
+        timings.ackEnd = Date.now();
+        if (acknowledgment) {
+          spokenAck = acknowledgment.text;
+          console.log(`[TIMING] Acknowledgment: ${timings.ackEnd - timings.ackStart}ms`);
+          pushChunk({
+            type: "acknowledgment",
+            content: acknowledgment.text,
+            isInterim: acknowledgment.needsFollowUp,
+          });
         }
       }
 
-      // Record assistant response in conversation history
-      if (responseText) {
-        addConversationMessage(this.config.userId, "assistant", responseText);
+      // Wait for prompt (likely already done - prompt is ~16ms, ack is ~0-100ms)
+      const systemPrompt = await promptPromise;
+      timings.promptReady = Date.now();
+      console.log(`[TIMING] Prompt ready: ${timings.promptReady - timings.start}ms from start`);
+
+      // Record user message in conversation history
+      addConversationMessage(this.config.userId, "user", message);
+
+      const options: Options = {
+        model: this.config.model,
+        systemPrompt,
+        permissionMode: "bypassPermissions", // Server-side, no user prompts
+        mcpServers: {
+          iris: this.mcpServer,
+        },
+        abortController: this.config.abortController,
+        includePartialMessages: true,
+      };
+
+      // Resume session if we have one
+      if (this.currentSessionId) {
+        options.resume = this.currentSessionId;
       }
 
-      yield {
-        type: "done",
-        content: "",
-        sessionId,
-      };
-    } catch (error) {
-      yield {
+      // Build the prompt - include ack context if we spoke one
+      // This lets the LLM continue naturally from what was already said
+      let fullPrompt = message;
+      if (spokenAck) {
+        fullPrompt = `[You already responded with: "${spokenAck}" - now continue naturally from that acknowledgment]\n\nUser: ${message}`;
+      }
+
+      // START QUERY IMMEDIATELY - this is the key optimization!
+      // Query starts NOW even while caller is playing ack TTS
+      timings.queryStart = Date.now();
+      console.log(`[TIMING] Agent SDK query() starting: ${timings.queryStart - timings.start}ms from start`);
+      const stream: Query = query({ prompt: fullPrompt, options });
+
+      let responseText = "";
+      let sessionId = this.currentSessionId;
+      let firstTokenLogged = false;
+
+      try {
+        for await (const msg of stream) {
+          // Log first token timing
+          if (!firstTokenLogged) {
+            timings.firstToken = Date.now();
+            console.log(
+              `[TIMING] First token from Agent SDK: ${timings.firstToken - timings.queryStart}ms after query(), ${timings.firstToken - timings.start}ms total`
+            );
+            firstTokenLogged = true;
+          }
+          const chunk = this.processMessage(msg);
+          if (chunk) {
+            // Track session ID
+            if (chunk.sessionId) {
+              sessionId = chunk.sessionId;
+              this.currentSessionId = sessionId;
+            }
+
+            // Accumulate text
+            if (chunk.type === "text") {
+              responseText += chunk.content;
+            }
+
+            pushChunk(chunk);
+          }
+        }
+
+        // Record assistant response in conversation history
+        if (responseText) {
+          addConversationMessage(this.config.userId, "assistant", responseText);
+        }
+
+        pushChunk({
+          type: "done",
+          content: "",
+          sessionId,
+        });
+      } catch (error) {
+        pushChunk({
+          type: "error",
+          content: error instanceof Error ? error.message : "Unknown error",
+        });
+      } finally {
+        state.done = true;
+        signal();
+      }
+    })();
+
+    // Capture producer promise to avoid unhandled rejection
+    producer.catch((e) => {
+      console.error("[AGENT] Producer error:", e);
+      pushChunk({
         type: "error",
-        content: error instanceof Error ? error.message : "Unknown error",
-      };
+        content: e instanceof Error ? e.message : "Unknown producer error",
+      });
+      state.done = true;
+      signal();
+    });
+
+    // === CONSUMER: Yield chunks as they become available ===
+    while (true) {
+      await waitForChunk();
+
+      // Drain all available chunks
+      while (chunkQueue.length > 0) {
+        yield chunkQueue.shift()!;
+      }
+
+      // Exit when producer is done and queue is empty
+      if (state.done && chunkQueue.length === 0) {
+        break;
+      }
     }
   }
 

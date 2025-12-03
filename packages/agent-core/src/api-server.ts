@@ -134,6 +134,7 @@ export function createApiServer(config: Partial<ApiServerConfig> = {}) {
               content: chunk.content,
               toolName: chunk.toolName,
               sessionId: chunk.sessionId,
+              isInterim: chunk.isInterim, // Forward acknowledgment flag
             }),
           });
         }

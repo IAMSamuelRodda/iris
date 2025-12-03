@@ -7,7 +7,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Message, TypingIndicator } from "./Message";
 import { streamChat, getVoiceStyles, type ChatMessage, type VoiceStyleId, type VoiceStyleOption } from "../api/agent";
-import { VoiceClient, type VoiceState } from "../api/voice";
+import { VoiceClient, type VoiceState, getAvailableVoices, selectVoice } from "../api/voice";
+import { TextChunker, type ChunkMode } from "../api/text-chunker";
 
 // Generate a simple user ID (in production, use auth)
 const getUserId = () => {
@@ -28,6 +29,24 @@ const setVoiceStylePreference = (style: VoiceStyleId) => {
   localStorage.setItem("iris-voice-style", style);
 };
 
+// Get/set TTS chunk mode preference (sentence vs paragraph)
+const getChunkModePreference = (): ChunkMode => {
+  return (localStorage.getItem("iris-chunk-mode") as ChunkMode) || "sentence";
+};
+
+const setChunkModePreference = (mode: ChunkMode) => {
+  localStorage.setItem("iris-chunk-mode", mode);
+};
+
+// Get/set TTS voice preference
+const getTtsVoicePreference = (): string => {
+  return localStorage.getItem("iris-tts-voice") || "Alexander";
+};
+
+const setTtsVoicePreference = (voice: string) => {
+  localStorage.setItem("iris-tts-voice", voice);
+};
+
 export function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -38,6 +57,15 @@ export function Chat() {
   const [voiceStyle, setVoiceStyle] = useState<VoiceStyleId>(getVoiceStylePreference);
   const [availableStyles, setAvailableStyles] = useState<VoiceStyleOption[]>([]);
   const [showStyleDropdown, setShowStyleDropdown] = useState(false);
+  const [chunkMode, setChunkMode] = useState<ChunkMode>(getChunkModePreference);
+  const [showChunkDropdown, setShowChunkDropdown] = useState(false);
+
+  // TTS Voice selection state
+  const [ttsVoices, setTtsVoices] = useState<string[]>([]);
+  const [currentTtsVoice, setCurrentTtsVoice] = useState<string>(getTtsVoicePreference);
+  const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -51,11 +79,63 @@ export function Chat() {
       .catch((err) => console.error("[Chat] Failed to load voice styles:", err));
   }, []);
 
+  // Load TTS voices and check readiness on mount
+  useEffect(() => {
+    const initVoices = async () => {
+      setVoiceLoading(true);
+      try {
+        const data = await getAvailableVoices();
+        setTtsVoices(data.voices);
+        setCurrentTtsVoice(data.current);
+        setVoiceReady(true);
+        console.log(`[Chat] Voice ready: ${data.current}, ${data.voices.length} voices available`);
+      } catch (err) {
+        console.error("[Chat] Failed to load TTS voices:", err);
+        // Still allow usage but voice might be slow first time
+        setVoiceReady(true);
+      } finally {
+        setVoiceLoading(false);
+      }
+    };
+    initVoices();
+  }, []);
+
+  // Handle TTS voice change
+  const handleTtsVoiceChange = async (voice: string) => {
+    setShowVoiceDropdown(false);
+    if (voice === currentTtsVoice) return;
+
+    setVoiceReady(false);
+    setVoiceLoading(true);
+    console.log(`[Chat] Switching voice to ${voice}...`);
+
+    try {
+      const result = await selectVoice(voice);
+      if (result.success) {
+        setCurrentTtsVoice(voice);
+        setTtsVoicePreference(voice);
+        console.log(`[Chat] ${result.message}`);
+      }
+    } catch (err) {
+      console.error("[Chat] Failed to change voice:", err);
+    } finally {
+      setVoiceReady(true);
+      setVoiceLoading(false);
+    }
+  };
+
   // Handle voice style change
   const handleStyleChange = (styleId: VoiceStyleId) => {
     setVoiceStyle(styleId);
     setVoiceStylePreference(styleId);
     setShowStyleDropdown(false);
+  };
+
+  // Handle chunk mode change
+  const handleChunkModeChange = (mode: ChunkMode) => {
+    setChunkMode(mode);
+    setChunkModePreference(mode);
+    setShowChunkDropdown(false);
   };
 
   // Initialize voice client
@@ -86,6 +166,28 @@ export function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Escape key handler for audio interrupt
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const client = voiceClientRef.current;
+        if (client && (voiceState === "speaking" || voiceState === "recording" || voiceState === "processing")) {
+          e.preventDefault();
+          console.log("[Chat] Escape pressed - interrupting");
+          client.interruptAll();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [voiceState]);
+
+  // Stop audio handler
+  const handleStopAudio = () => {
+    voiceClientRef.current?.stopAudio();
+  };
+
   // Send message
   const handleSend = useCallback(
     async (text?: string) => {
@@ -109,19 +211,30 @@ export function Chat() {
       const assistantId = `msg-${Date.now()}-assistant`;
       let assistantContent = "";
 
+      // Create text chunker for streaming TTS (only in voice mode)
+      const isVoiceMode = !!text && voiceClientRef.current?.isConnected();
+      const chunker = isVoiceMode ? new TextChunker({ mode: chunkMode }) : null;
+      const styleProps = availableStyles.find((s) => s.id === voiceStyle)?.voiceProperties;
+
+      // Helper to send text to TTS
+      const synthesizeChunk = (chunkText: string) => {
+        if (isVoiceMode && chunkText.trim()) {
+          console.log(`[Chat] TTS chunk (${chunkMode}):`, chunkText.slice(0, 50) + (chunkText.length > 50 ? "..." : ""));
+          voiceClientRef.current?.synthesize(
+            chunkText,
+            styleProps?.exaggeration ?? 0.5,
+            styleProps?.speechRate ?? 1.0
+          );
+        }
+      };
+
       try {
         for await (const chunk of streamChat(userId.current, messageText, sessionId, voiceStyle)) {
           switch (chunk.type) {
             case "acknowledgment":
-              // Quick acknowledgment for voice feedback
-              // In voice mode, speak immediately; in text mode, show briefly
-              if (text && voiceClientRef.current?.isConnected()) {
-                const styleProps = availableStyles.find((s) => s.id === voiceStyle)?.voiceProperties;
-                voiceClientRef.current.synthesize(
-                  chunk.content,
-                  styleProps?.exaggeration ?? 0.5,
-                  styleProps?.speechRate ?? 1.0
-                );
+              // Quick acknowledgment for voice feedback - speak immediately
+              if (isVoiceMode) {
+                synthesizeChunk(chunk.content);
               }
               // Show acknowledgment in chat (will be replaced by full response)
               if (chunk.isInterim) {
@@ -156,6 +269,14 @@ export function Chat() {
                   },
                 ];
               });
+
+              // Feed text to chunker for streaming TTS
+              if (chunker) {
+                const completedChunks = chunker.add(chunk.content);
+                for (const completedChunk of completedChunks) {
+                  synthesizeChunk(completedChunk);
+                }
+              }
               break;
 
             case "tool_start":
@@ -176,14 +297,12 @@ export function Chat() {
               if (chunk.sessionId) {
                 setSessionId(chunk.sessionId);
               }
-              // Trigger TTS for voice responses with voice style properties
-              if (text && assistantContent && voiceClientRef.current?.isConnected()) {
-                const styleProps = availableStyles.find((s) => s.id === voiceStyle)?.voiceProperties;
-                voiceClientRef.current.synthesize(
-                  assistantContent,
-                  styleProps?.exaggeration ?? 0.5,
-                  styleProps?.speechRate ?? 1.0
-                );
+              // Flush remaining text to TTS
+              if (chunker) {
+                const remaining = chunker.flush();
+                if (remaining) {
+                  synthesizeChunk(remaining);
+                }
               }
               break;
 
@@ -217,7 +336,7 @@ export function Chat() {
         setCurrentTool(null);
       }
     },
-    [input, isStreaming, sessionId, voiceStyle]
+    [input, isStreaming, sessionId, voiceStyle, chunkMode, availableStyles]
   );
 
   // Handle key press
@@ -359,6 +478,140 @@ export function Chat() {
           )}
         </div>
 
+        {/* TTS Chunk Mode Selector */}
+        <div className="chunk-selector" style={{ position: "relative" }}>
+          <button
+            className="btn btn-secondary chunk-btn"
+            onClick={() => setShowChunkDropdown(!showChunkDropdown)}
+            title={`TTS Chunking: ${chunkMode === "sentence" ? "Sentence (faster)" : "Paragraph (natural)"}`}
+            style={{
+              padding: "8px 12px",
+              fontSize: "12px",
+              minWidth: "auto",
+              background: "var(--bg-tertiary)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "8px",
+              cursor: "pointer",
+            }}
+          >
+            {chunkMode === "sentence" ? "S" : "P"}
+          </button>
+          {showChunkDropdown && (
+            <div
+              className="chunk-dropdown"
+              style={{
+                position: "absolute",
+                bottom: "100%",
+                left: 0,
+                marginBottom: "8px",
+                background: "var(--bg-secondary)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                minWidth: "200px",
+                zIndex: 100,
+              }}
+            >
+              <button
+                onClick={() => handleChunkModeChange("sentence")}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "10px 14px",
+                  textAlign: "left",
+                  background: chunkMode === "sentence" ? "var(--primary-color)" : "transparent",
+                  border: "none",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  borderRadius: "8px 8px 0 0",
+                }}
+              >
+                <div style={{ fontWeight: 500 }}>Sentence</div>
+                <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}>Faster first audio, choppier</div>
+              </button>
+              <button
+                onClick={() => handleChunkModeChange("paragraph")}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "10px 14px",
+                  textAlign: "left",
+                  background: chunkMode === "paragraph" ? "var(--primary-color)" : "transparent",
+                  border: "none",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  borderRadius: "0 0 8px 8px",
+                }}
+              >
+                <div style={{ fontWeight: 500 }}>Paragraph</div>
+                <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}>More natural prosody</div>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* TTS Voice Selector */}
+        <div className="voice-selector" style={{ position: "relative" }}>
+          <button
+            className="btn btn-secondary voice-select-btn"
+            onClick={() => setShowVoiceDropdown(!showVoiceDropdown)}
+            disabled={voiceLoading}
+            title={voiceLoading ? "Loading voice..." : `Voice: ${currentTtsVoice}`}
+            style={{
+              padding: "8px 12px",
+              fontSize: "12px",
+              minWidth: "auto",
+              background: voiceLoading ? "var(--bg-tertiary)" : "var(--bg-tertiary)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "8px",
+              cursor: voiceLoading ? "wait" : "pointer",
+              opacity: voiceLoading ? 0.6 : 1,
+            }}
+          >
+            {voiceLoading ? "..." : currentTtsVoice.slice(0, 3)}
+          </button>
+          {showVoiceDropdown && ttsVoices.length > 0 && (
+            <div
+              className="voice-dropdown"
+              style={{
+                position: "absolute",
+                bottom: "100%",
+                left: 0,
+                marginBottom: "8px",
+                background: "var(--bg-secondary)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                minWidth: "140px",
+                maxHeight: "300px",
+                overflowY: "auto",
+                zIndex: 100,
+              }}
+            >
+              {ttsVoices.map((voice, idx) => (
+                <button
+                  key={voice}
+                  onClick={() => handleTtsVoiceChange(voice)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "8px 14px",
+                    textAlign: "left",
+                    background: voice === currentTtsVoice ? "var(--primary-color)" : "transparent",
+                    border: "none",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                    borderRadius: idx === 0 ? "8px 8px 0 0" : idx === ttsVoices.length - 1 ? "0 0 8px 8px" : "0",
+                    fontSize: "13px",
+                  }}
+                >
+                  {voice}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <textarea
           ref={inputRef}
           className="chat-input"
@@ -370,25 +623,51 @@ export function Chat() {
           disabled={isStreaming}
         />
 
-        <button
-          className={`btn btn-primary voice-btn ${voiceState === "recording" ? "recording" : ""}`}
-          onClick={toggleRecording}
-          disabled={isStreaming || voiceState === "processing" || voiceState === "speaking"}
-          title={getVoiceButtonLabel()}
-        >
-          {voiceState === "recording" ? (
+        {/* Voice/Stop button - shows stop when speaking, disabled when voice loading */}
+        {voiceState === "speaking" ? (
+          <button
+            className="btn btn-danger stop-btn"
+            onClick={handleStopAudio}
+            title="Stop audio (Escape)"
+            style={{
+              background: "#dc3545",
+              borderColor: "#dc3545",
+            }}
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="2" />
             </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          )}
-        </button>
+          </button>
+        ) : (
+          <button
+            className={`btn btn-primary voice-btn ${voiceState === "recording" ? "recording" : ""}`}
+            onClick={toggleRecording}
+            disabled={isStreaming || voiceState === "processing" || !voiceReady}
+            title={!voiceReady ? "Loading voice..." : getVoiceButtonLabel()}
+            style={{
+              opacity: !voiceReady ? 0.5 : 1,
+              cursor: !voiceReady ? "wait" : "pointer",
+            }}
+          >
+            {voiceState === "recording" ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            ) : !voiceReady ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                <circle cx="12" cy="12" r="10" opacity="0.3" />
+                <path d="M12 2a10 10 0 0 1 10 10" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            )}
+          </button>
+        )}
 
         <button className="btn btn-primary" onClick={() => handleSend()} disabled={!input.trim() || isStreaming}>
           {isStreaming ? (

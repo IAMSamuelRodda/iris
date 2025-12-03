@@ -49,7 +49,14 @@ from scipy.io import wavfile
 from fastapi import WebSocket
 
 from .stt import ModelSize, SpeechToText, get_stt
-from .tts import TextToSpeech, get_tts
+from .tts_kokoro import (
+    KokoroTTS,
+    get_kokoro_tts,
+    list_kokoro_voices,
+    set_kokoro_voice,
+    DEFAULT_VOICE,
+    AVAILABLE_VOICES,
+)
 from .websocket import get_voice_handler
 
 # Configure logging
@@ -68,16 +75,36 @@ TTS_DEVICE: Literal["cpu", "cuda", "auto"] = os.getenv("TTS_DEVICE", "cuda")  # 
 PRELOAD_MODELS = os.getenv("PRELOAD_MODELS", "false").lower() == "true"
 
 
+async def warmup_tts():
+    """Warm up TTS by synthesizing a short phrase."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    tts = get_kokoro_tts(TTS_DEVICE)
+    # Run synthesis in thread pool to not block
+    await loop.run_in_executor(
+        None,
+        lambda: tts.synthesize("Ready.")
+    )
+    logger.info("Kokoro TTS warmup complete")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan - preload models if configured."""
+    """Application lifespan - preload models and warmup."""
     logger.info(f"Voice backend starting: STT={STT_DEVICE}, TTS={TTS_DEVICE}")
-    if PRELOAD_MODELS:
-        logger.info("Preloading voice models...")
-        # Access models to trigger lazy loading
-        _ = get_stt(STT_MODEL_SIZE, STT_DEVICE).model
-        _ = get_tts(TTS_DEVICE).model
-        logger.info("Voice models preloaded successfully")
+    logger.info(f"Default voice: {DEFAULT_VOICE}")
+
+    # Always preload STT model (it's fast)
+    logger.info("Loading STT model...")
+    _ = get_stt(STT_MODEL_SIZE, STT_DEVICE).model
+    logger.info("STT model loaded")
+
+    # Always preload and warmup Kokoro TTS (important for first-request latency)
+    logger.info("Loading Kokoro TTS model and warming up...")
+    _ = get_kokoro_tts(TTS_DEVICE).pipeline
+    await warmup_tts()
+    logger.info(f"Kokoro TTS ready with voice: {DEFAULT_VOICE}")
+
     yield
     logger.info("Shutting down voice backend")
 
@@ -131,6 +158,35 @@ class HealthResponse(BaseModel):
     device: str
 
 
+class VoicesResponse(BaseModel):
+    """List of available voices."""
+
+    voices: list[str]
+    current: str
+
+
+class VoiceSelectRequest(BaseModel):
+    """Request to select a voice."""
+
+    voice: str
+
+
+class VoiceSelectResponse(BaseModel):
+    """Response after selecting a voice."""
+
+    success: bool
+    voice: str
+    message: str
+
+
+class WarmupResponse(BaseModel):
+    """Response from warmup endpoint."""
+
+    ready: bool
+    voice: str
+    warmup_time_ms: float
+
+
 # ==============================================================================
 # API Endpoints
 # ==============================================================================
@@ -140,13 +196,86 @@ class HealthResponse(BaseModel):
 async def health_check():
     """Check service health and model status."""
     stt = get_stt(STT_MODEL_SIZE, STT_DEVICE)
-    tts = get_tts(TTS_DEVICE)
+    tts = get_kokoro_tts(TTS_DEVICE)
 
     return HealthResponse(
         status="ok",
         stt_loaded=stt._model is not None,
-        tts_loaded=tts._model is not None,
-        device=f"stt={STT_DEVICE}, tts={TTS_DEVICE}",
+        tts_loaded=tts._pipeline is not None,
+        device=f"stt={STT_DEVICE}, tts={TTS_DEVICE} (kokoro)",
+    )
+
+
+# ==============================================================================
+# Voice Management Endpoints
+# ==============================================================================
+
+
+@app.get("/api/voices", response_model=VoicesResponse)
+async def get_voices():
+    """List all available Kokoro voice options."""
+    tts = get_kokoro_tts(TTS_DEVICE)
+
+    return VoicesResponse(
+        voices=[v["id"] for v in list_kokoro_voices()],
+        current=tts.current_voice,
+    )
+
+
+@app.post("/api/voice/select", response_model=VoiceSelectResponse)
+async def select_voice(request: VoiceSelectRequest):
+    """
+    Select a Kokoro voice.
+
+    Voice switching is instant with Kokoro - no model reload needed.
+    """
+    import time
+
+    voice_id = request.voice
+
+    # Check if voice exists in curated list
+    available = [v["id"] for v in list_kokoro_voices()]
+    if voice_id not in available:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Voice '{voice_id}' not found. Available: {', '.join(available[:5])}..."
+        )
+
+    # Switch voice (instant - just changes the embedding ID)
+    set_kokoro_voice(voice_id)
+
+    # Quick warmup with new voice
+    start = time.time()
+    await warmup_tts()
+    warmup_ms = (time.time() - start) * 1000
+
+    return VoiceSelectResponse(
+        success=True,
+        voice=voice_id,
+        message=f"Voice changed to {voice_id}. Warmup took {warmup_ms:.0f}ms",
+    )
+
+
+@app.post("/api/warmup", response_model=WarmupResponse)
+async def warmup_voice():
+    """
+    Warm up the Kokoro TTS system with current voice.
+
+    Call this after the voice backend starts or after changing voices
+    to ensure the first synthesis request is fast.
+    """
+    import time
+
+    tts = get_kokoro_tts(TTS_DEVICE)
+
+    start = time.time()
+    await warmup_tts()
+    warmup_ms = (time.time() - start) * 1000
+
+    return WarmupResponse(
+        ready=True,
+        voice=tts.current_voice,
+        warmup_time_ms=warmup_ms,
     )
 
 
@@ -214,17 +343,15 @@ async def transcribe_audio(
 @app.post("/synthesize")
 async def synthesize_speech(request: SynthesizeRequest):
     """
-    Synthesize speech from text using Chatterbox.
+    Synthesize speech from text using Kokoro.
 
     Returns WAV audio file.
     """
     try:
-        tts = get_tts(TTS_DEVICE)
+        tts = get_kokoro_tts(TTS_DEVICE)
         result = tts.synthesize(
             text=request.text,
-            exaggeration=request.exaggeration,
-            cfg_weight=request.cfg_weight,
-            speech_rate=request.speech_rate,
+            speed=request.speech_rate,
         )
 
         # Return as WAV
@@ -247,13 +374,13 @@ async def synthesize_speech(request: SynthesizeRequest):
 @app.post("/synthesize/stream")
 async def synthesize_speech_streaming(request: SynthesizeRequest):
     """
-    Synthesize speech with streaming response.
+    Synthesize speech with streaming response using Kokoro.
 
     Returns raw PCM audio chunks for lower latency.
     Client should buffer and play as received.
     """
     try:
-        tts = get_tts(TTS_DEVICE)
+        tts = get_kokoro_tts(TTS_DEVICE)
 
         def generate():
             for chunk in tts.synthesize_streaming(request.text):

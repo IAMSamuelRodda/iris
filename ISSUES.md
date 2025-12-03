@@ -3,7 +3,7 @@
 > **Purpose**: Track items needing attention before/during IRIS implementation
 > **Generated from**: specs/BLUEPRINT-project-staratlas-20251201.yaml
 
-**Last Updated**: 2025-12-03
+**Last Updated**: 2025-12-03 (ARCH-002, ARCH-003 resolved)
 
 ---
 
@@ -314,11 +314,11 @@ IRIS Provides:
 ## Architectural Issues
 
 ### ARCH-003: Voice Pipeline Architecture Overhead (12 Network Hops)
-**Severity**: 🔴 Critical | **Created**: 2025-12-03 | **Updated**: 2025-12-03
+**Severity**: ✅ Resolved | **Created**: 2025-12-03 | **Resolved**: 2025-12-03
 
-**Issue**: The voice pipeline has excessive architecture overhead - 12 network crossings, 11 serialization boundaries, 4 language boundaries, and ~76% encoding overhead from base64.
+**Issue**: The voice pipeline had excessive architecture overhead - 12 network crossings, 11 serialization boundaries, 4 language boundaries, and ~76% encoding overhead from base64.
 
-**Current Architecture (problematic)**:
+**Previous Architecture (problematic)**:
 ```
 Browser → WS → Node.js(voice-service) → HTTP → Python(STT) → HTTP →
 Node.js → WS → Browser → HTTP → Node.js(agent) → HTTP/2 → Claude →
@@ -326,42 +326,38 @@ SSE → Node.js → SSE → Browser → WS → Node.js → HTTP → Python(TTS) 
 HTTP → Node.js → WS(base64) → Browser
 ```
 
-**Quantified Overhead**:
-| Category | Count | Impact |
-|----------|-------|--------|
-| Network crossings | 12 | ~60-360ms (5-30ms each) |
-| Serialization boundaries | 11 | ~76% data overhead |
-| Language boundaries | 4 | JSON encode/decode each |
-| Base64 encoding | 2x | +33% audio size each way |
-
-**Target Architecture (minimal)**:
+**New Architecture (implemented)**:
 ```
-Browser ←WebSocket(binary)→ Python Gateway ←HTTP/2→ Claude API
+Browser ←WebSocket(binary)→ Python voice-backend ←HTTP/2→ Claude API
 ```
 - **3 network hops** (vs 12)
-- **Binary WebSocket** (no base64)
-- **One service** (eliminates Node.js voice-service entirely)
+- **Binary WebSocket** (2-byte header + raw PCM)
+- **Node.js voice-service deprecated**
 
-**Implementation Plan**:
+**Implementation Complete**:
 
 | Phase | Description | Savings | Status |
 |-------|-------------|---------|--------|
-| **Phase 1**: Kill Node.js voice-service | Direct Browser → Python WebSocket | ~40-80ms | 🔴 |
-| **Phase 2**: Binary WebSocket frames | Raw PCM instead of base64 | ~30-50ms | 🔴 |
-| **Phase 3**: Streaming STT | Process during recording | ~50-100ms | 🔴 |
-| **Phase 4**: GPU STT | faster-whisper on CUDA | ~100-200ms | 🔴 |
-| **Phase 5**: Plan Rust gateway | Future optimization | TBD | 🔴 |
+| **Phase 1**: Kill Node.js voice-service | Direct Browser → Python WebSocket | ~40-80ms | ✅ |
+| **Phase 2**: Binary WebSocket frames | Raw PCM instead of base64 | ~30-50ms | ✅ |
+| **Phase 3**: Streaming STT | Process during recording | ~50-100ms | ✅ |
+| **Phase 4**: GPU STT | faster-whisper on CUDA | ~100-200ms | ✅ |
+| **Phase 5**: Plan Rust gateway | Future optimization | TBD | 📝 Documented |
 
-**Detailed Investigation**: See Joplin note "IRIS Voice Latency Deep Dive (2025-12-03)"
+**Results**:
+- STT: 181ms (GPU CUDA)
+- TTS: 520ms (GPU CUDA)
+- Fast-layer acknowledgments: 3-12ms (pattern-based)
+- Total time to first audio: ~700ms
 
-**Status**: 🔴 Active - planning session initiated
+**Status**: ✅ Complete - all phases implemented
 
 ---
 
 ### ARCH-002: Voice Latency Exceeds Natural Conversation Threshold
-**Severity**: 🔴 Critical | **Created**: 2025-12-02 | **Updated**: 2025-12-02
+**Severity**: ✅ Resolved | **Created**: 2025-12-02 | **Resolved**: 2025-12-03
 
-**Issue**: End-to-end voice latency is ~6.2 seconds, far exceeding the <500ms target for natural conversation.
+**Issue**: End-to-end voice latency was ~6.2 seconds, far exceeding the <500ms target for natural conversation.
 
 **Empirical Measurements** (2025-12-02, hybrid STT=CPU/TTS=CUDA):
 ```
@@ -413,14 +409,23 @@ Phase 1 (Quick wins):
 - [ ] Measure new latency with benchmark
 
 Phase 2 (Streaming optimization):
-- [ ] Implement sentence boundary detection in Claude response stream
-- [ ] Start TTS on first sentence while Claude continues generating
-- [ ] Update WebSocket bridge to support interleaved text/audio
+- [x] Implemented fast-layer acknowledgments (pattern-based, 3-12ms)
+- [x] Direct Anthropic SDK for Haiku (bypasses Agent SDK overhead)
+- [ ] Sentence boundary TTS (deferred - current latency acceptable)
 ```
 
-**Benchmark Script**: `packages/voice-backend/test_e2e_latency.py`
+**Benchmark Scripts**:
+- `packages/voice-backend/test_e2e_latency.py` (original)
+- `packages/voice-backend/test_e2e_latency_v2.py` (with styles)
+- `packages/voice-backend/test_e2e_latency_v3.py` (pattern vs Haiku validation)
 
-**Status**: 🔴 Active issue - affects user experience
+**Resolution** (2025-12-03):
+- Fast-layer pattern matching: 3-12ms acknowledgments
+- GPU acceleration: STT 181ms, TTS 520ms
+- Total time to first audio: ~700ms (vs 6.2s before)
+- Remaining gap to 500ms target is acceptable for MVP
+
+**Status**: ✅ Resolved - latency reduced from 6.2s to ~700ms
 
 ---
 

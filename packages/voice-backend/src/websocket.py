@@ -35,7 +35,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from scipy.io import wavfile
 
 from .stt import get_stt
-from .tts import get_tts
+from .tts_kokoro import get_kokoro_tts
 from .protocol import (
     MessageType,
     MessageFlags,
@@ -510,28 +510,26 @@ class VoiceWebSocketHandler:
         speech_rate: float = 1.0,
     ) -> bytes:
         """
-        Synthesize speech from text using Chatterbox.
+        Synthesize speech from text using Kokoro.
 
         Args:
             text: Text to synthesize.
-            exaggeration: Emotion exaggeration (0.0-1.0).
-            cfg_weight: Classifier-free guidance weight.
+            exaggeration: Unused (Kokoro doesn't support this).
+            cfg_weight: Unused (Kokoro doesn't support this).
             speech_rate: Speech rate multiplier.
 
         Returns:
             WAV audio bytes.
         """
-        # Run synthesis in thread pool (Chatterbox uses PyTorch)
+        # Run synthesis in thread pool (Kokoro uses PyTorch)
         loop = asyncio.get_event_loop()
-        tts = get_tts(self.tts_device)
+        tts = get_kokoro_tts(self.tts_device)
 
         result = await loop.run_in_executor(
             None,
             lambda: tts.synthesize(
                 text=text,
-                exaggeration=exaggeration,
-                cfg_weight=cfg_weight,
-                speech_rate=speech_rate,
+                speed=speech_rate,
             ),
         )
 

@@ -3,10 +3,17 @@ Text-to-Speech using Chatterbox.
 
 Provides expressive, low-latency voice synthesis for IRIS.
 Supports voice cloning and emotion control.
+
+Voice files are in the ./voices directory. Available voices:
+  Abigail, Adrian, Alexander, Alice, Austin, Axel, Connor, Cora,
+  Elena, Eli, Emily, Everett, Gabriel, Gianna, Henry, Ian, Jade,
+  Jeremiah, Jordan, Julian, Layla, Leonardo, Michael, Miles,
+  Olivia, Ryan, Taylor, Thomas
 """
 
 import io
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -15,6 +22,12 @@ import numpy as np
 from scipy.io import wavfile
 
 logger = logging.getLogger(__name__)
+
+# Default voice for IRIS - change to any name from the voices folder
+DEFAULT_VOICE = os.environ.get("TTS_VOICE", "Emily")
+
+# Path to voices directory (relative to this file)
+VOICES_DIR = Path(__file__).parent.parent / "voices"
 
 
 @dataclass
@@ -58,6 +71,7 @@ class TextToSpeech:
         self,
         device: Literal["cpu", "cuda", "auto"] = "auto",
         voice_reference: str | Path | None = None,
+        voice_name: str | None = None,
     ):
         """
         Initialize the TTS model.
@@ -65,11 +79,35 @@ class TextToSpeech:
         Args:
             device: Compute device. "auto" selects GPU if available.
             voice_reference: Optional path to reference audio for voice cloning.
+            voice_name: Name of a voice from the voices/ folder (e.g., "Alexander").
+                       If provided, overrides voice_reference.
         """
         self.device = device
-        self.voice_reference = voice_reference
         self._model = None
         self._sample_rate = 24000  # Chatterbox default
+
+        # Resolve voice reference
+        if voice_name:
+            voice_path = VOICES_DIR / f"{voice_name}.wav"
+            if voice_path.exists():
+                self.voice_reference = voice_path
+                logger.info(f"Using voice: {voice_name}")
+            else:
+                logger.warning(f"Voice '{voice_name}' not found, using default")
+                self.voice_reference = self._get_default_voice()
+        elif voice_reference:
+            self.voice_reference = Path(voice_reference)
+        else:
+            self.voice_reference = self._get_default_voice()
+
+    def _get_default_voice(self) -> Path | None:
+        """Get the default voice reference path."""
+        default_path = VOICES_DIR / f"{DEFAULT_VOICE}.wav"
+        if default_path.exists():
+            logger.info(f"Using default voice: {DEFAULT_VOICE}")
+            return default_path
+        logger.warning(f"Default voice '{DEFAULT_VOICE}' not found")
+        return None
 
     @property
     def model(self):
@@ -218,3 +256,32 @@ def get_tts(device: Literal["cpu", "cuda", "auto"] = "auto") -> TextToSpeech:
     if _tts_instance is None:
         _tts_instance = TextToSpeech(device=device)
     return _tts_instance
+
+
+def list_available_voices() -> list[str]:
+    """List all available voice names from the voices directory."""
+    if not VOICES_DIR.exists():
+        return []
+    return sorted([f.stem for f in VOICES_DIR.glob("*.wav")])
+
+
+def set_voice(voice_name: str) -> bool:
+    """
+    Change the active voice for the singleton TTS instance.
+
+    Args:
+        voice_name: Name of the voice (e.g., "Alexander", "Michael")
+
+    Returns:
+        True if voice was set successfully, False if voice not found.
+    """
+    global _tts_instance
+    voice_path = VOICES_DIR / f"{voice_name}.wav"
+    if not voice_path.exists():
+        logger.warning(f"Voice '{voice_name}' not found")
+        return False
+
+    if _tts_instance is not None:
+        _tts_instance.voice_reference = voice_path
+        logger.info(f"Switched to voice: {voice_name}")
+    return True

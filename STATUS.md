@@ -3,7 +3,7 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-03 (Fast-layer optimization: 5s → 3ms acknowledgments)
+**Last Updated**: 2025-12-03 (Kokoro TTS integration: 500ms → 42ms synthesis)
 **Current Phase**: Implementation (Voice Latency Optimization)
 **Version**: 0.1.0 (Pre-MVP)
 
@@ -20,7 +20,7 @@
 | MCP Server Foundation | Done | Feature 1.1 complete (lifecycle, tools, errors) |
 | **Memory Service** | **Done** | Epic 2 complete (knowledge graph, MCP tools, tests) |
 | **Agent Core** | **Done** | Epic 3 complete (Claude Agent SDK, IrisAgent class) |
-| **Voice Service** | **Done** | Epic 4 complete (faster-whisper STT, Chatterbox TTS) |
+| **Voice Service** | **Done** | Epic 4 complete (faster-whisper STT, Kokoro TTS) |
 | **Web App** | **Done** | Epic 5 complete (React + Vite, chat UI, voice PTT) |
 | CI/CD Pipeline | N/A | Main-only workflow; deploy via docker-compose |
 | Test Coverage | Partial | 12 tests for memory service |
@@ -39,10 +39,10 @@
   - Agent HTTP API server (Hono + SSE streaming)
   - Environment-based configuration (VITE_AGENT_API_URL, VITE_VOICE_WS_URL)
 - **Voice Service (Epic 4) complete**:
-  - Python voice-backend (FastAPI + faster-whisper + Chatterbox)
+  - Python voice-backend (FastAPI + faster-whisper + Kokoro)
   - Node.js WebSocket bridge for browser audio streaming
   - STT: faster-whisper with int8 quantization (~200MB for base model)
-  - TTS: Chatterbox with emotion control and voice cloning
+  - TTS: Kokoro-82M (~42ms synthesis, 11 curated voices)
   - Docker Compose orchestration for voice services
   - Modular architecture: browser → WebSocket → Python backend
 - **Agent Core (Epic 3) complete**:
@@ -106,7 +106,7 @@
   - Acknowledgments now trigger for typical voice input
   - Voice-only feedback (no text shown) - intentional for speed
   - Measured warm TTS: 2-3s for acknowledgment synthesis
-  - Known issue: TTS cold start ~16s (Chatterbox model load)
+  - Known issue: TTS cold start ~2s (Kokoro model load)
   - ✅ Fixed: Audio overlap (ack + response now play sequentially)
 
 **In Progress:**
@@ -129,23 +129,24 @@
 - 🟢 **Voice Latency Optimization** (2025-12-03 - ARCH-002):
   - ✅ Empirical benchmark created: `test_e2e_latency.py`
   - ✅ Measured: E2E latency = 6.2s (target: <500ms)
-  - ✅ GPU TTS acceleration: Chatterbox on RTX 4090 (896ms, down from ~60s on CPU)
-  - ✅ Hybrid device config: STT=CPU (266ms), TTS=CUDA (896ms)
+  - ✅ GPU TTS acceleration: Kokoro on RTX 4090 (42ms, 12x faster than Chatterbox)
+  - ✅ Full GPU config: STT=CUDA (181ms), TTS=CUDA (42ms)
   - ✅ Fast Layer: Haiku 4.5 for quick acknowledgments while Sonnet processes
-  - ✅ Fast Layer tested: acknowledgments working via voice (2-3s TTS)
+  - ✅ Fast Layer tested: acknowledgments working via voice
+  - ✅ Audio queue: Fixed overlap with producer-consumer pattern
   - ❌ Bottleneck: Claude API (Sonnet) = 5030ms (81% of total)
-  - **Next**: Audio queue (prevent ack + response overlap), TTS pre-warming
+  - **Target**: ~225ms audio latency (STT + pattern match + TTS)
 
 - 🟢 **Voice Integration** (Complete 2025-12-03):
   - ✅ STT (faster-whisper) - **GPU WORKING** - 181ms latency (32% faster than CPU)
   - ✅ WebSocket bridge - audio streaming from browser functional
   - ✅ Push-to-talk UI - recording and sending audio
-  - ✅ TTS (Chatterbox) - **WORKING** - 520ms on GPU
+  - ✅ TTS (Kokoro) - **WORKING** - 42ms on GPU (12x faster than Chatterbox)
   - ✅ Response conciseness - max 2 sentences for TTS
   - ✅ Duplicate response bug - fixed
   - ✅ cuDNN conflict resolved - auto-load nvidia-cudnn libs at startup
   - Note: Full GPU mode (STT_DEVICE=cuda, TTS_DEVICE=cuda)
-  - Note: Chatterbox model ~3GB cached in ~/.cache/huggingface/
+  - Note: Kokoro-82M model cached in ~/.cache/huggingface/
 
 - 🟡 **Integration Testing** (2025-12-02):
   - ✅ Agent API (port 3001) - working, tested chat endpoint
@@ -193,11 +194,11 @@
 **ARCH-002: Voice Latency Optimization** ✅ RESOLVED
 - **Fast-Layer Benchmark** (v2): `packages/voice-backend/test_e2e_latency_v2.py`
 - **Measured Fast Path** (Full GPU, warm):
-  - STT: 181ms + Pattern match: 3-12ms + TTS: 520ms = **~700ms to first audio** ✅
+  - STT: 181ms + Pattern match: 3-12ms + TTS: 42ms = **~225ms to first audio** ✅
 - **Pattern-based acknowledgments**: 3-12ms (covers ~90% of voice queries)
 - **Haiku dynamic acknowledgments**: 1.7-2.7s (for unmatched patterns)
 - **GPU STT**: 181ms (vs 266ms on CPU - 32% faster) - cuDNN conflict RESOLVED
-- **GPU TTS**: 520ms (vs 13s on CPU - 25x improvement)
+- **GPU TTS (Kokoro)**: 42ms (vs 500ms with Chatterbox - 12x improvement)
 - **Claude main model**: Currently Haiku for testing (switch to Sonnet for production)
 - **Run services**: `STT_DEVICE=cuda TTS_DEVICE=cuda` (default, both GPU)
 - **Run benchmark**: `python test_e2e_latency_v2.py --compare-styles`
@@ -211,10 +212,10 @@ None
 - Fixed: Audio now queued sequentially (nextPlayTime scheduling)
 - File: `packages/web-app/src/api/voice.ts`
 
-**TTS Cold Start** (2025-12-03)
-- First TTS request takes ~16s (Chatterbox model loading)
-- Subsequent requests ~500ms
-- Consider pre-warming model on server startup
+**TTS Cold Start** ✅ RESOLVED (2025-12-03)
+- Switched to Kokoro-82M: cold start ~2s, warm synthesis ~42ms
+- Model pre-warmed on server startup (see warmup_tts() in main.py)
+- 11 curated voices available (default: af_heart)
 
 **Acknowledgment Timing** (Low priority)
 - Acknowledgments may feel "too fast" - slightly robotic
@@ -226,6 +227,7 @@ None
 
 **Voice Latency Optimization (2025-12-03)**
 - **GPU STT**: 181ms (32% faster than CPU 266ms) - cuDNN conflict RESOLVED
+- **GPU TTS (Kokoro)**: 42ms (12x faster than Chatterbox's 500ms)
 - cuDNN fix: Auto-load nvidia-cudnn libs at startup via ctypes.CDLL
 - Full GPU pipeline: STT=CUDA + TTS=CUDA both working together
 - Streaming audio capture: Real-time PCM via ScriptProcessorNode (~93ms chunks)
@@ -242,15 +244,15 @@ None
 
 **Voice UX Enhancement (2025-12-03)**
 - Voice Styles: 5 distinct conversation modes (Normal, Formal, Concise, Immersive, Learning)
-- GPU TTS: 520ms acknowledgment synthesis (25x faster than CPU)
-- **Time to first audio: ~500ms** (STT ~180ms + pattern match 3ms + TTS latency)
+- GPU TTS: 42ms synthesis with Kokoro (12x faster than Chatterbox's 500ms)
+- **Time to first audio: ~225ms** (STT ~180ms + pattern match 3ms + TTS ~42ms)
 - UI: Voice style selector with persistent preferences
 
 **Architecture Refresh (2025-12-01)**
 - Migrated from AWS to Digital Ocean VPS (cost-predictable)
 - Deferred personality progression (colleague -> partner -> friend)
 - Adopted pip-by-arc-forge pattern (SQLite + Node.js)
-- Updated to Chatterbox for self-hosted voice ($0/month)
+- Self-hosted voice with Kokoro-82M ($0/month, Apache 2.0 license)
 
 **Vision & Planning Session (2025-11-12)**
 - Established multi-user SaaS scope with voice-first interface
