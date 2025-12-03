@@ -3,7 +3,7 @@
 > **Purpose**: Track items needing attention before/during IRIS implementation
 > **Generated from**: specs/BLUEPRINT-project-staratlas-20251201.yaml
 
-**Last Updated**: 2025-12-02
+**Last Updated**: 2025-12-03
 
 ---
 
