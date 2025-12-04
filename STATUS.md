@@ -3,7 +3,7 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-03 (Kokoro TTS integration: 500ms → 42ms synthesis)
+**Last Updated**: 2025-12-04 (Streaming Narrator module merged)
 **Current Phase**: Implementation (Voice Latency Optimization)
 **Version**: 0.1.0 (Pre-MVP)
 
@@ -81,6 +81,18 @@
 - Architecture pivot: AWS -> Digital Ocean VPS
 - Memory architecture simplified to SQLite (pip-by-arc-forge pattern)
 - Voice service updated to use Chatterbox (self-hosted STT/TTS)
+
+**Completed (2025-12-04):**
+- **Streaming Narrator Module** (Experimental):
+  - Ingests context snippets from agent pipeline, decides what to vocalize
+  - Dual implementation: local Qwen 7B (production) and cloud Haiku (reference)
+  - Verbosity levels: silent, minimal, normal, verbose
+  - Context buffer with rolling window for "what's happening?" queries
+  - Cooldown mechanism to prevent vocalization spam
+  - Benchmarks: Qwen 7B = 180-200ms, Haiku = 1500-3200ms (100% API time)
+  - Decision: Local Qwen for production, Haiku for reference/future OAuth
+  - Files: `packages/agent-core/src/narrator/`
+  - Status: Merged to main, not yet integrated with agent.ts producer loop
 
 **Completed (2025-12-03):**
 - **Voice Styles System** (UX Enhancement):
@@ -224,6 +236,14 @@ None
 ---
 
 ## Recent Achievements (Last 2 Weeks)
+
+**Streaming Narrator Module (2025-12-04)**
+- **Local-first approach**: Qwen 2.5 7B at 180-200ms latency (production ready)
+- **Cloud reference**: Haiku 4.5 at 1500-3200ms (100% API time, validates local-first)
+- **Architecture**: Base narrator + provider implementations (Ollama, Haiku)
+- **Features**: Verbosity control, context buffer, cooldown, A/B comparison harness
+- **Benchmarking**: Interactive TTS playback for human evaluation
+- **Future**: Integrate with agent.ts, WebSocket streaming, hybrid mode
 
 **Voice Latency Optimization (2025-12-03)**
 - **GPU STT**: 181ms (32% faster than CPU 266ms) - cuDNN conflict RESOLVED
