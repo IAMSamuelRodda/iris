@@ -1,18 +1,21 @@
 # IRIS
 
-> **Your guy in the chair for Star Atlas** | *by Arc Forge*
+> **Voice-first agentic layer** | *by Arc Forge*
 
 *IRIS - Intelligent Reconnaissance & Information System*
 
-In Greek mythology, Iris was the goddess of the rainbow and messenger of the gods. In Star Atlas, IRIS is your intelligent companion - bridging you to fleet status, market data, and the pulse of the metaverse through natural conversation.
+In Greek mythology, Iris was the goddess of the rainbow and messenger of the gods. IRIS is a voice-first optimized layer for agentic systems - bridging natural conversation to any domain through modular integrations.
 
+**Current Integration**: Star Atlas (via Citadel)
 **Current Work**: See [`STATUS.md`](./STATUS.md)
 
 ---
 
 ## Overview
 
-IRIS is your intelligent assistant for Star Atlas - the guy in the chair while you're out commanding fleets. Monitor your fleet, optimize your economy, and get smart recommendations through natural conversation.
+IRIS is a **reusable voice-first layer** designed to plug into multiple agentic systems. The core provides voice processing, memory, and agent orchestration - while domain-specific integrations connect via MCP adapters.
+
+**First implementation**: Star Atlas companion (via Citadel app) - your guy in the chair while you're out commanding fleets.
 
 **Key Features:**
 - **Voice-First Interface** - Push-to-talk with <500ms response time
@@ -59,6 +62,7 @@ See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for complete details.
 
 | Document | Purpose |
 |----------|---------|
+| [`VISION.md`](./VISION.md) | Strategic vision, multi-system architecture |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System design, database schema, ADRs |
 | [`STATUS.md`](./STATUS.md) | Current work, blockers |
 | [`PROGRESS.md`](./PROGRESS.md) | Task tracking (72 tasks) |

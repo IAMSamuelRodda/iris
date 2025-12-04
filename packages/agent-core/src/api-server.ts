@@ -18,7 +18,15 @@ import { streamSSE } from "hono/streaming";
 import { serve } from "@hono/node-server";
 import { z } from "zod";
 import { createAgent, type IrisAgentConfig } from "./agent.js";
+import { createLocalAgent } from "./local-agent.js";
 import { getVoiceStyleOptions, isValidVoiceStyleId } from "./voice-styles.js";
+import { warmupOllama } from "./ollama-client.js";
+import {
+  getModel,
+  getModelOptions,
+  isValidModelId,
+  DEFAULT_LAYER_CONFIG,
+} from "./model-config.js";
 
 // ============================================================================
 // Request/Response Schemas
@@ -29,6 +37,8 @@ const ChatRequestSchema = z.object({
   message: z.string().min(1),
   sessionId: z.string().optional(),
   voiceStyle: z.string().optional(),
+  /** Model ID for thinking layer (default: from DEFAULT_LAYER_CONFIG) */
+  modelId: z.string().optional(),
 });
 
 
@@ -92,6 +102,17 @@ export function createApiServer(config: Partial<ApiServerConfig> = {}) {
   });
 
   // =========================================================================
+  // Models Endpoint
+  // =========================================================================
+
+  app.get("/api/models", (c) => {
+    return c.json({
+      models: getModelOptions("thinking"),
+      default: DEFAULT_LAYER_CONFIG.thinking,
+    });
+  });
+
+  // =========================================================================
   // Chat Endpoint (Streaming via SSE)
   // =========================================================================
 
@@ -109,45 +130,88 @@ export function createApiServer(config: Partial<ApiServerConfig> = {}) {
       );
     }
 
-    const { userId, message, sessionId, voiceStyle } = parseResult.data;
+    const { userId, message, sessionId, voiceStyle, modelId } = parseResult.data;
 
     // Validate voiceStyle if provided
     const validatedStyle = voiceStyle && isValidVoiceStyleId(voiceStyle) ? voiceStyle : undefined;
 
-    // Create agent with optional session resume and voice style
-    const agentConfig: IrisAgentConfig = {
-      userId,
-      sessionId,
-      voiceStyle: validatedStyle,
-    };
+    // Validate and resolve model
+    const resolvedModelId = modelId && isValidModelId(modelId) ? modelId : DEFAULT_LAYER_CONFIG.thinking;
+    const modelConfig = getModel(resolvedModelId);
 
-    const agent = createAgent(agentConfig);
+    if (!modelConfig) {
+      return c.json({ error: "Invalid model" }, 400);
+    }
 
-    // Stream response via SSE
-    return streamSSE(c, async (stream) => {
-      try {
-        for await (const chunk of agent.chat(message)) {
+    console.log(`[API] Chat request using model: ${modelConfig.name} (${modelConfig.provider})`);
+
+    // Route to appropriate agent based on provider
+    if (modelConfig.provider === "ollama") {
+      // Use LocalAgent for Ollama models
+      const agent = createLocalAgent({
+        userId,
+        modelId: resolvedModelId,
+        voiceStyle: validatedStyle,
+      });
+
+      return streamSSE(c, async (stream) => {
+        try {
+          for await (const chunk of agent.chat(message)) {
+            await stream.writeSSE({
+              event: chunk.type,
+              data: JSON.stringify({
+                type: chunk.type,
+                content: chunk.content,
+                isInterim: chunk.isInterim,
+              }),
+            });
+          }
+        } catch (error) {
           await stream.writeSSE({
-            event: chunk.type,
+            event: "error",
             data: JSON.stringify({
-              type: chunk.type,
-              content: chunk.content,
-              toolName: chunk.toolName,
-              sessionId: chunk.sessionId,
-              isInterim: chunk.isInterim, // Forward acknowledgment flag
+              type: "error",
+              content: error instanceof Error ? error.message : "Unknown error",
             }),
           });
         }
-      } catch (error) {
-        await stream.writeSSE({
-          event: "error",
-          data: JSON.stringify({
-            type: "error",
-            content: error instanceof Error ? error.message : "Unknown error",
-          }),
-        });
-      }
-    });
+      });
+    } else {
+      // Use IrisAgent (Claude) for Anthropic models
+      const agentConfig: IrisAgentConfig = {
+        userId,
+        sessionId,
+        voiceStyle: validatedStyle,
+        model: modelConfig.modelId,
+      };
+
+      const agent = createAgent(agentConfig);
+
+      return streamSSE(c, async (stream) => {
+        try {
+          for await (const chunk of agent.chat(message)) {
+            await stream.writeSSE({
+              event: chunk.type,
+              data: JSON.stringify({
+                type: chunk.type,
+                content: chunk.content,
+                toolName: chunk.toolName,
+                sessionId: chunk.sessionId,
+                isInterim: chunk.isInterim,
+              }),
+            });
+          }
+        } catch (error) {
+          await stream.writeSSE({
+            event: "error",
+            data: JSON.stringify({
+              type: "error",
+              content: error instanceof Error ? error.message : "Unknown error",
+            }),
+          });
+        }
+      });
+    }
   });
 
   // =========================================================================
@@ -178,8 +242,14 @@ export function createApiServer(config: Partial<ApiServerConfig> = {}) {
 
   return {
     app,
-    start: () => {
+    start: async () => {
       console.log(`IRIS Agent API starting on port ${finalConfig.port}...`);
+
+      // Warmup Ollama for fast acknowledgments (non-blocking)
+      warmupOllama().catch(() => {
+        // Warmup failure is not critical - will fallback to simple acks
+      });
+
       const server = serve({
         fetch: app.fetch,
         port: finalConfig.port,
