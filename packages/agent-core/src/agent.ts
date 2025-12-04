@@ -20,7 +20,6 @@ import { type VoiceStyleId, type VoiceStyle, getVoiceStyle } from "./voice-style
 import {
   generateQuickAcknowledgment,
   needsAcknowledgment,
-  getQuickFallback,
   type QuickAcknowledgment,
 } from "./fast-layer.js";
 
@@ -368,18 +367,13 @@ export class IrisAgent {
 
   /**
    * Get a quick acknowledgment for the user message.
-   * Tries pattern-based fallback first, then Haiku for dynamic responses.
+   * Uses local Qwen 2.5 7B via Ollama for ~130ms contextual responses.
    */
   private async getAcknowledgment(message: string): Promise<QuickAcknowledgment | null> {
     const voiceStyleId = this.config.voiceStyle || "normal";
 
-    // Try quick fallback first (instant, no API call)
-    const fallback = getQuickFallback(message, voiceStyleId);
-    if (fallback) {
-      return fallback;
-    }
-
-    // Use Haiku for dynamic acknowledgment
+    // Use local Qwen for contextual acknowledgment (~130ms)
+    // Falls back to simple responses if Ollama unavailable
     return generateQuickAcknowledgment(message, {
       voiceStyle: voiceStyleId,
       userId: this.config.userId,

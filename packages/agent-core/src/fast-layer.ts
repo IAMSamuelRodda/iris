@@ -1,39 +1,44 @@
 /**
  * Fast Layer for Quick Acknowledgments
  *
- * Uses Claude Haiku via the Agent SDK for immediate voice feedback while
- * the main model (Sonnet) processes complex requests. Provides natural
- * conversation flow with minimal latency.
+ * Uses local Qwen 2.5 7B via Ollama for immediate voice feedback while
+ * the main model (Claude Sonnet) processes complex requests. Provides
+ * natural, contextual acknowledgments with ~130ms latency.
  *
- * Uses Agent SDK's query() for consistency with main architecture,
- * enabling future delegation patterns (Haiku -> Sonnet for complex analysis).
+ * Architecture:
+ * - User speaks → STT (181ms) → Qwen (130ms) → TTS (42ms) → User hears ack
+ * - In parallel: Claude Sonnet processes the main response
+ *
+ * Benefits over pattern matching:
+ * - Contextual responses ("Checking your fleet status" not "Got it")
+ * - Natural variation (not robotic repetition)
+ * - Understands intent (questions vs commands)
  *
  * Triggered based on voiceStyle.voiceProperties.thinkingFeedback:
  * - "none": No acknowledgments, silent processing
- * - "minimal": Quick acknowledgment, then result
- * - "verbose": Detailed thinking feedback throughout
+ * - "minimal": Quick contextual acknowledgment
+ * - "verbose": Detailed thinking feedback
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { type VoiceStyleId, getVoiceStyle } from "./voice-styles.js";
-
-// Singleton Anthropic client for fast acknowledgments
-// Uses direct API instead of Agent SDK for minimal latency (~100ms vs ~5s)
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic();
-  }
-  return anthropicClient;
-}
+import { ollamaGenerate, FAST_ACK_MODEL, isOllamaAvailable } from "./ollama-client.js";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-/** Claude Haiku 4.5 for fast acknowledgments */
-const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+/** System prompt for fast acknowledgment generation */
+const FAST_ACK_SYSTEM_PROMPT = `You are IRIS, a voice AI assistant for Star Atlas players.
+Generate ONLY a brief acknowledgment (5-8 words) that tells the user you understood
+their request and are working on it. Do NOT answer the question - just acknowledge.
+
+Examples:
+- "Check my fleet" → "Checking your fleet status now."
+- "Why is fuel low?" → "Looking into your fuel situation."
+- "What's the price of ATLAS?" → "Pulling up ATLAS prices."
+- "Hey IRIS" → "Hey! Ready to help."
+
+Be concise, natural, and contextual.`;
 
 /**
  * Categories of user intent that determine acknowledgment style.
@@ -56,8 +61,8 @@ export interface QuickAcknowledgment {
   intent: IntentCategory;
   /** Whether this needs follow-up (main model processing) */
   needsFollowUp: boolean;
-  /** Suggested delegation announcement (if applicable) */
-  delegationText?: string;
+  /** Generation latency in ms (for debugging) */
+  latencyMs?: number;
 }
 
 export interface FastLayerConfig {
@@ -69,18 +74,18 @@ export interface FastLayerConfig {
   recentContext?: string;
 }
 
+// Track Ollama availability
+let ollamaAvailable: boolean | null = null;
+
 // ============================================================================
 // Fast Layer Implementation
 // ============================================================================
 
 /**
- * Generate a quick acknowledgment using Haiku via Agent SDK.
+ * Generate a quick acknowledgment using local Qwen 2.5 7B.
  *
- * Uses the same query() function as the main agent for consistency,
- * but with Haiku 4.5 for speed. This enables future delegation patterns
- * where Haiku could escalate to Sonnet for complex analysis.
- *
- * Designed for <200ms response time.
+ * Uses Ollama for ~130ms response time (vs ~2s for API calls).
+ * Falls back to simple acknowledgment if Ollama is unavailable.
  */
 export async function generateQuickAcknowledgment(
   userMessage: string,
@@ -93,40 +98,57 @@ export async function generateQuickAcknowledgment(
     return null;
   }
 
-  const systemPrompt = buildAcknowledgmentPrompt(style.voiceProperties.thinkingFeedback === "verbose");
-  const prompt = buildUserPrompt(userMessage, config.recentContext);
+  // Check Ollama availability (cached)
+  if (ollamaAvailable === null) {
+    ollamaAvailable = await isOllamaAvailable();
+    if (!ollamaAvailable) {
+      console.warn("[FastLayer] Ollama not available, using fallback acknowledgments");
+    }
+  }
+
+  // Build the prompt
+  const prompt = buildPrompt(userMessage, config.recentContext, style.voiceProperties.thinkingFeedback === "verbose");
 
   try {
-    // Use direct Anthropic API for minimum latency (~100ms vs ~5s with Agent SDK)
-    const client = getAnthropicClient();
-    const response = await client.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 100, // Short acknowledgments only
-      system: systemPrompt,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const start = Date.now();
 
-    // Extract text from response
-    let responseText = "";
-    for (const block of response.content) {
-      if (block.type === "text") {
-        responseText += block.text;
-      }
+    if (ollamaAvailable) {
+      // Use local Qwen for contextual acknowledgment
+      const response = await ollamaGenerate({
+        model: FAST_ACK_MODEL,
+        system: FAST_ACK_SYSTEM_PROMPT,
+        prompt: prompt,
+        options: {
+          num_predict: 25, // Short acknowledgments only
+          temperature: 0.7,
+        },
+      });
+
+      const latencyMs = Date.now() - start;
+      const text = response.response.trim();
+
+      console.log(`[FastLayer] Qwen ack (${latencyMs}ms): "${text}"`);
+
+      return {
+        text: text || "Got it, working on that.",
+        intent: detectIntent(userMessage),
+        needsFollowUp: true,
+        latencyMs,
+      };
+    } else {
+      // Fallback: simple acknowledgment
+      return getSimpleFallback(userMessage);
     }
-
-    return parseAcknowledgmentResponse(responseText);
   } catch (error) {
     console.error("[FastLayer] Acknowledgment generation failed:", error);
-    // Fail silently - fast layer is optional
-    return null;
+    // Mark Ollama as unavailable and return fallback
+    ollamaAvailable = false;
+    return getSimpleFallback(userMessage);
   }
 }
 
 /**
  * Check if a message needs acknowledgment based on voice style and content.
- *
- * For voice input, we want quick feedback to reduce perceived latency.
- * The threshold is intentionally low - most messages benefit from acknowledgment.
  */
 export function needsAcknowledgment(userMessage: string, voiceStyle: VoiceStyleId): boolean {
   const style = getVoiceStyle(voiceStyle);
@@ -136,7 +158,7 @@ export function needsAcknowledgment(userMessage: string, voiceStyle: VoiceStyleI
     return false;
   }
 
-  // Very short messages (< 5 chars) are likely noise or single words like "yes"/"no"
+  // Very short messages (< 5 chars) are likely noise
   if (userMessage.length < 5) {
     return false;
   }
@@ -152,189 +174,79 @@ export function needsAcknowledgment(userMessage: string, voiceStyle: VoiceStyleI
     return false;
   }
 
-  // All other messages get acknowledgment for voice latency improvement
   return true;
 }
 
 /**
- * Get a pre-canned acknowledgment for common patterns.
- * Faster than calling Haiku when pattern is clear.
- *
- * NOTE: Pattern-based fallbacks are ~4ms vs Haiku ~1.7-2.7s.
- * We intentionally cast a wide net here to maximize instant responses.
+ * Reset Ollama availability check (call if Ollama starts up later).
  */
-export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId): QuickAcknowledgment | null {
-  const style = getVoiceStyle(voiceStyle);
-
-  if (style.voiceProperties.thinkingFeedback === "none") {
-    return null;
-  }
-
-  const lowerMessage = userMessage.toLowerCase().trim();
-
-  // Star Atlas specific patterns
-  if (lowerMessage.includes("fleet") || lowerMessage.includes("ship")) {
-    return {
-      text: "Checking your fleet status.",
-      intent: "command",
-      needsFollowUp: true,
-      delegationText: "Pulling up the fleet data now.",
-    };
-  }
-
-  if (lowerMessage.includes("wallet") || lowerMessage.includes("balance") || lowerMessage.includes("account")) {
-    return {
-      text: "Let me check that for you.",
-      intent: "command",
-      needsFollowUp: true,
-      delegationText: "Accessing wallet information.",
-    };
-  }
-
-  if (lowerMessage.includes("market") || lowerMessage.includes("price") || lowerMessage.includes("trade")) {
-    return {
-      text: "Looking up the market data.",
-      intent: "command",
-      needsFollowUp: true,
-    };
-  }
-
-  if (lowerMessage.includes("mission") || lowerMessage.includes("quest") || lowerMessage.includes("task")) {
-    return {
-      text: "Let me check on that.",
-      intent: "command",
-      needsFollowUp: true,
-    };
-  }
-
-  // Question patterns (wide net for questions)
-  if (/^(what|where|when|why|who|how|can you|could you|would you|will you|is there|are there|do you|does|did)/i.test(lowerMessage)) {
-    return {
-      text: "Let me look into that.",
-      intent: "question",
-      needsFollowUp: true,
-    };
-  }
-
-  // Request patterns
-  if (/^(tell me|show me|give me|explain|describe|find|search|look up|get me|list)/i.test(lowerMessage)) {
-    return {
-      text: "Sure, one moment.",
-      intent: "command",
-      needsFollowUp: true,
-    };
-  }
-
-  // Help patterns
-  if (lowerMessage.includes("help") || lowerMessage.includes("how do") || lowerMessage.includes("how can i")) {
-    return {
-      text: "Sure, I can help with that.",
-      intent: "question",
-      needsFollowUp: true,
-    };
-  }
-
-  // Action patterns
-  if (/^(do|make|create|build|start|stop|enable|disable|turn|set|change|update)/i.test(lowerMessage)) {
-    return {
-      text: "On it.",
-      intent: "command",
-      needsFollowUp: true,
-    };
-  }
-
-  // Status/update patterns
-  if (lowerMessage.includes("status") || lowerMessage.includes("update") || lowerMessage.includes("progress")) {
-    return {
-      text: "Checking the status now.",
-      intent: "command",
-      needsFollowUp: true,
-    };
-  }
-
-  // Fallback: Any message over 10 chars that didn't match gets a generic acknowledgment
-  // This catches most real queries while skipping noise
-  if (lowerMessage.length > 10) {
-    return {
-      text: "Got it, working on that.",
-      intent: "unclear",
-      needsFollowUp: true,
-    };
-  }
-
-  // Short messages with no clear pattern - let Haiku handle
-  return null;
+export function resetOllamaAvailability(): void {
+  ollamaAvailable = null;
 }
 
 // ============================================================================
-// Prompt Building
+// Helpers
 // ============================================================================
 
-function buildAcknowledgmentPrompt(verbose: boolean): string {
-  const basePrompt = `You are IRIS, a voice AI assistant. Generate a brief spoken acknowledgment for the user's request.
-
-Rules:
-- Maximum 10 words
-- Natural, conversational tone
-- No questions back
-- Show you understood the intent
-
-Output format (JSON):
-{"text": "acknowledgment", "intent": "question|command|statement|greeting|unclear", "needsFollowUp": true|false}`;
-
-  if (verbose) {
-    return (
-      basePrompt +
-      `
-
-For verbose mode, also include what you're about to do:
-{"text": "acknowledgment", "intent": "...", "needsFollowUp": true, "delegationText": "what you're checking"}`
-    );
-  }
-
-  return basePrompt;
-}
-
-function buildUserPrompt(userMessage: string, recentContext?: string): string {
-  let prompt = `User message: "${userMessage}"`;
+function buildPrompt(userMessage: string, recentContext?: string, verbose?: boolean): string {
+  let prompt = `User: "${userMessage}"`;
 
   if (recentContext) {
-    prompt = `Recent context:\n${recentContext}\n\n${prompt}`;
+    prompt = `Context:\n${recentContext}\n\n${prompt}`;
+  }
+
+  if (verbose) {
+    prompt += "\n\nInclude what you're about to check/do.";
   }
 
   return prompt;
 }
 
-// ============================================================================
-// Response Parsing
-// ============================================================================
+function detectIntent(message: string): IntentCategory {
+  const lower = message.toLowerCase().trim();
 
-function parseAcknowledgmentResponse(response: string): QuickAcknowledgment {
-  try {
-    // Try to parse as JSON
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        text: parsed.text || "Got it.",
-        intent: validateIntent(parsed.intent),
-        needsFollowUp: parsed.needsFollowUp !== false,
-        delegationText: parsed.delegationText,
-      };
-    }
-  } catch {
-    // Fall through to default
+  if (/^(hi|hey|hello|yo|sup)[\s!?,]*/.test(lower)) {
+    return "greeting";
   }
 
-  // Default fallback
+  if (/^(what|where|when|why|who|how|can|could|would|is|are|do|does|did)/i.test(lower)) {
+    return "question";
+  }
+
+  if (/^(check|show|get|find|tell|list|create|start|stop|enable|disable)/i.test(lower)) {
+    return "command";
+  }
+
+  return "unclear";
+}
+
+/**
+ * Simple fallback when Ollama is unavailable.
+ * Much simpler than pattern matching - just a few generic responses.
+ */
+function getSimpleFallback(userMessage: string): QuickAcknowledgment {
+  const intent = detectIntent(userMessage);
+
+  const fallbacks: Record<IntentCategory, string> = {
+    greeting: "Hey there!",
+    question: "Let me look into that.",
+    command: "On it.",
+    statement: "Got it.",
+    unclear: "Working on that.",
+  };
+
   return {
-    text: response.slice(0, 50) || "Got it.",
-    intent: "unclear",
+    text: fallbacks[intent],
+    intent,
     needsFollowUp: true,
   };
 }
 
-function validateIntent(intent: string): IntentCategory {
-  const valid: IntentCategory[] = ["question", "command", "statement", "greeting", "unclear"];
-  return valid.includes(intent as IntentCategory) ? (intent as IntentCategory) : "unclear";
+// Legacy export for backwards compatibility (now unused)
+export function getQuickFallback(userMessage: string, voiceStyle: VoiceStyleId): QuickAcknowledgment | null {
+  const style = getVoiceStyle(voiceStyle);
+  if (style.voiceProperties.thinkingFeedback === "none") {
+    return null;
+  }
+  return getSimpleFallback(userMessage);
 }
