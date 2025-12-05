@@ -220,6 +220,59 @@ VITE_API_URL=http://localhost:3000
 
 ---
 
+## Native Client Secrets (API Keys for Tools)
+
+The native IRIS client (`iris_local.py`) uses a separate secrets file for tool API keys.
+
+### Setup
+
+```bash
+# 1. Create config directory (first time only)
+mkdir -p ~/.config/iris
+
+# 2. Create secrets file from template (template is in repo)
+cp packages/voice-backend/secrets.env.template ~/.config/iris/secrets.env
+
+# 3. Edit and add your API keys
+nano ~/.config/iris/secrets.env
+```
+
+### Available API Keys
+
+```env
+# ~/.config/iris/secrets.env
+
+# Brave Search API (free tier at https://brave.com/search/api/)
+BRAVE_API_KEY=your_brave_api_key_here
+```
+
+### Priority Order
+
+1. `~/.config/iris/secrets.env` (recommended, persistent)
+2. Environment variables (fallback)
+
+### Security Notes
+
+- `secrets.env` is user-only readable (Unix permissions)
+- Never commit secrets to version control
+- For AI agents setting up new machines: prompt user to provide keys via secure input
+
+### Tools Requiring API Keys
+
+| Tool | API Key | Free Tier |
+|------|---------|-----------|
+| `web_search` | `BRAVE_API_KEY` | Yes (2,000/month) |
+
+### Verifying Setup
+
+```bash
+cd packages/voice-backend
+source .venv/bin/activate
+python src/tools.py  # Shows which tools are configured
+```
+
+---
+
 ## Local Development Setup
 
 ### Prerequisites
@@ -435,4 +488,4 @@ See ISSUES.md ARCH-009 for context window optimization strategies:
 
 ---
 
-**Last Updated**: 2025-12-05
+**Last Updated**: 2025-12-06
