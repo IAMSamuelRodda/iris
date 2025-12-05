@@ -268,6 +268,38 @@ vLLM Server (keeps multiple models warm):
 - [ ] Test vLLM concurrent model loading
 - [ ] Evaluate SGLang for tool calling reliability
 - [ ] Design delegation protocol (context passing)
+- [ ] **Investigate A2A (Agent-to-Agent) protocol** - Google's open standard
+- [ ] **Study Claude Code's delegation architecture** - how Anthropic does subagents
+
+**Agent Communication Protocols to Evaluate**:
+
+| Protocol | Origin | Description | Investigate When |
+|----------|--------|-------------|------------------|
+| **A2A** | Google | Open standard for agent interoperability | Delegation spike |
+| **MCP** | Anthropic | Tool/resource protocol (we use this) | Already integrated |
+| **Custom** | Internal | Direct function calls, shared context | MVP approach |
+| **Claude Code pattern** | Anthropic | Task runners with isolated context | Delegation spike |
+
+**A2A Protocol (Google - April 2025)**:
+- Open specification for agent-to-agent communication
+- Designed for cross-vendor agent interoperability
+- Potential benefits: standardized handoff, capability discovery
+- Needs research: overhead vs custom, compatibility with local models
+
+**Claude Code Delegation Pattern**:
+- Uses `Task` tool to spawn subagents with specific capabilities
+- Subagents have isolated context (stateless, single task)
+- Results returned to main agent for integration
+- Different agent types for different tasks (Explore, Plan, etc.)
+- Study: context isolation benefits, result aggregation patterns
+
+**Pros/Cons Analysis (Future Research)**:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **A2A Protocol** | Interoperability, standardized | Overhead?, new tech, may be overkill for local |
+| **Custom Delegation** | Simple, low latency, full control | Not portable, reinventing wheel |
+| **Claude Code Style** | Battle-tested, context isolation | Anthropic-specific patterns |
 
 **Status**: 🔮 Future (implement delegation logic with Ollama first, migrate infrastructure when limits hit)
 
