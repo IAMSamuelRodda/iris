@@ -803,7 +803,7 @@ class IrisLocal:
         # Add tools if enabled
         if use_tools:
             payload["tools"] = TOOLS
-            logger.debug(f"[LLM] Tools enabled: {len(TOOLS)} tools available")
+            logger.info(f"[LLM] Tools enabled: {[t['function']['name'] for t in TOOLS]}")
 
         response = requests.post(
             f"{self.config.ollama_url}/api/chat",
@@ -815,6 +815,8 @@ class IrisLocal:
         # Check for tool calls
         message = result.get("message", {})
         tool_calls = message.get("tool_calls", [])
+
+        logger.info(f"[LLM] Tool calls in response: {len(tool_calls) if tool_calls else 0}")
 
         if tool_calls:
             # Execute tools and get final response
