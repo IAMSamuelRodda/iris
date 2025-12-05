@@ -245,6 +245,14 @@ None
 - **RealtimeSTT prototype**: `src/stt_streaming.py` available for future streaming needs
 - **Conclusion**: Batch mode with optimized beam_size is sufficient; streaming architecture not required
 
+**Voice Flow Test (2025-12-05)**
+- **Test harness**: `packages/voice-backend/test_voice_flow.py` - automated test with audio playback
+- **Architecture validated**: STT → Ollama LLM → Kokoro TTS (pattern matching removed)
+- **LLM latency (direct Ollama)**: qwen2.5:7b ~160ms, mistral:7b ~276ms
+- **TTS latency (warm)**: ~57ms for typical voice responses
+- **Total latency**: 200-350ms for local 7B models (meets <500ms target)
+- **Note**: Agent API uses Claude Cloud (~4-5s), direct Ollama for fast local inference
+
 **Streaming Narrator Module (2025-12-04)**
 - **Local-first approach**: Qwen 2.5 7B at 180-200ms latency (production ready)
 - **Cloud reference**: Haiku 4.5 at 1500-3200ms (100% API time, validates local-first)
