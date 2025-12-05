@@ -433,6 +433,66 @@ MEMORY_TOOLS = [
 
 ---
 
+### ARCH-011: Self-Hosted Web Search Infrastructure
+**Severity**: 🔮 Future | **Created**: 2025-12-06
+**Component**: voice-backend, distribution
+
+**Context**: IRIS needs web search capability. Current approach uses Brave Search API (requires API key). Future goal: self-hosted option for full offline/privacy control.
+
+**Current Implementation** (MVP):
+- Brave Search API with user-provided API key
+- First-run detection prompts user to get key
+- `BRAVE_API_KEY` environment variable or config file
+
+**Future Self-Hosted Options**:
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| **SearXNG** | Metasearch aggregator | No rate limits, privacy | Requires external network |
+| **YaCy** | P2P search engine | Fully offline capable | Small index, slower |
+| **Meilisearch** | Local search engine | Fast, offline | Only searches indexed content |
+
+**Architecture Vision**:
+```
+Option A: Bundle SearXNG in .deb
+├── SearXNG as systemd service
+├── IRIS calls localhost:8888
+├── User gets unlimited searches
+└── Challenge: ~500MB+ additional dependencies
+
+Option B: Arc Forge Hosted Service
+├── iris-search.arcforge.dev
+├── Free tier: 100 searches/day
+├── Paid tier: Unlimited ($X/month)
+├── Revenue stream for open source project
+└── Users can still self-host (all code open source)
+
+Option C: Hybrid
+├── Local SearXNG for power users
+├── Arc Forge hosted for casual users
+├── Brave API fallback (user's own key)
+```
+
+**API Key Collection During .deb Install**:
+- **Cannot fully automate** - Brave requires email signup
+- **Best practice**: First-run wizard with helpful URL
+- **debconf prompts** possible but awkward UX
+- **Environment variable** (`BRAVE_API_KEY`) is standard pattern
+
+**Implementation Order**:
+1. ✅ MVP: Brave Search API with manual key setup
+2. 🔮 Future: SearXNG self-hosted option
+3. 🔮 Future: Arc Forge hosted service (if user demand)
+
+**Prerequisites**:
+- Brave Search tool working (MVP)
+- User feedback on search importance
+- Cost analysis for hosted service
+
+**Status**: 🔮 Future (document for roadmap, implement Brave for now)
+
+---
+
 ## Low Priority / Future (Riff Session 2025-12-05)
 
 ### ISSUE-015: Remove Temporary System Prompt Limitations

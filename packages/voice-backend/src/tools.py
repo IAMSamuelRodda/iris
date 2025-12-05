@@ -13,11 +13,17 @@ Usage:
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import requests
+
 logger = logging.getLogger(__name__)
+
+# API keys from environment
+BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
 
 
 # ==============================================================================
@@ -56,6 +62,27 @@ TOOLS = [
                     }
                 },
                 "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for current information. Use when user asks about recent events, news, facts you don't know, or anything that might need up-to-date information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query (e.g., 'weather in Brisbane', 'latest news about Star Atlas', 'who won the 2024 election')",
+                    },
+                    "count": {
+                        "type": "integer",
+                        "description": "Number of results to return (1-5, default 3)",
+                    }
+                },
+                "required": ["query"],
             },
         },
     },
@@ -140,6 +167,70 @@ def _calculate(expression: str) -> str:
         return f"Cannot calculate: {str(e)}"
 
 
+def _web_search(query: str, count: int = 3) -> str:
+    """Search the web using Brave Search API."""
+    if not BRAVE_API_KEY:
+        return (
+            "Web search is not configured. To enable it:\n"
+            "1. Get a free API key at https://brave.com/search/api/\n"
+            "2. Set BRAVE_API_KEY environment variable\n"
+            "3. Restart IRIS"
+        )
+
+    # Clamp count to 1-5
+    count = max(1, min(5, count))
+
+    try:
+        logger.info(f"[Tools] Web search: '{query}' (count={count})")
+
+        response = requests.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            headers={
+                "Accept": "application/json",
+                "X-Subscription-Token": BRAVE_API_KEY,
+            },
+            params={
+                "q": query,
+                "count": count,
+                "safesearch": "moderate",
+            },
+            timeout=10,
+        )
+
+        if response.status_code == 401:
+            return "Web search API key is invalid. Please check your BRAVE_API_KEY."
+        elif response.status_code == 429:
+            return "Web search rate limit reached. Please try again later."
+        elif response.status_code != 200:
+            logger.error(f"[Tools] Brave API error: {response.status_code} {response.text}")
+            return f"Web search failed (HTTP {response.status_code})"
+
+        data = response.json()
+        web_results = data.get("web", {}).get("results", [])
+
+        if not web_results:
+            return f"No results found for '{query}'"
+
+        # Format results for LLM consumption
+        results = []
+        for i, result in enumerate(web_results[:count], 1):
+            title = result.get("title", "No title")
+            description = result.get("description", "No description")
+            url = result.get("url", "")
+            results.append(f"{i}. {title}\n   {description}\n   URL: {url}")
+
+        return f"Search results for '{query}':\n\n" + "\n\n".join(results)
+
+    except requests.Timeout:
+        return "Web search timed out. Please try again."
+    except requests.RequestException as e:
+        logger.error(f"[Tools] Web search error: {e}")
+        return f"Web search failed: {str(e)}"
+    except Exception as e:
+        logger.error(f"[Tools] Web search unexpected error: {e}")
+        return f"Web search error: {str(e)}"
+
+
 # ==============================================================================
 # Tool Execution
 # ==============================================================================
@@ -148,6 +239,7 @@ def _calculate(expression: str) -> str:
 TOOL_FUNCTIONS = {
     "get_current_time": _get_current_time,
     "calculate": _calculate,
+    "web_search": _web_search,
 }
 
 
@@ -196,6 +288,17 @@ if __name__ == "__main__":
     print(f"  Calc: {execute_tool('calculate', {'expression': '15% of 200'})}")
     print(f"  Calc: {execute_tool('calculate', {'expression': '100 * 1.5'})}")
 
+    print(f"\nWeb search test:")
+    if BRAVE_API_KEY:
+        print(f"  API key: configured")
+        result = execute_tool('web_search', {'query': 'Star Atlas game', 'count': 2})
+        print(f"  Result:\n{result}")
+    else:
+        print(f"  API key: NOT configured (set BRAVE_API_KEY to test)")
+        print(f"  Without key: {execute_tool('web_search', {'query': 'test'})}")
+
     print(f"\nTool-capable models check:")
     for model in ["qwen2.5:7b", "llama3.1:8b", "mistral:7b", "phi3:mini"]:
         print(f"  {model}: {supports_tools(model)}")
+
+    print(f"\nAvailable tools: {get_tool_names()}")
