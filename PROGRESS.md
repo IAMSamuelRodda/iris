@@ -5,7 +5,7 @@
 > **Focus**: **Native Primary, Web Secondary**
 > **Generated from**: specs/BLUEPRINT-project-staratlas-20251201.yaml
 
-**Last Updated**: 2025-12-05
+**Last Updated**: 2025-12-06
 **Milestone**: v0.1.0 Native Client MVP
 
 ---
@@ -85,16 +85,17 @@
 ### Feature 0.7: Local Tool Integration (3-5 days) 🟡
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
-| task_0_7_1 | Implement Ollama tool calling wrapper | 2.5 | 1d | 🟡 |
-| task_0_7_2 | Add tool registration and execution framework | 2.0 | 0.5d | 🔴 |
-| task_0_7_3 | Integrate tool results into conversation flow | 2.2 | 0.5d | 🔴 |
-| task_0_7_4 | Time/date tool (current time, timezone support) | 1.5 | 0.5d | 🔴 |
-| task_0_7_5 | Calculator tool (basic math operations) | 1.5 | 0.5d | 🔴 |
+| task_0_7_1 | Implement Ollama tool calling wrapper | 2.5 | 1d | 🟢 |
+| task_0_7_2 | Add tool registration and execution framework | 2.0 | 0.5d | 🟢 |
+| task_0_7_3 | Integrate tool results into conversation flow | 2.2 | 0.5d | 🟢 |
+| task_0_7_4 | Time/date tool (current time, timezone support) | 1.5 | 0.5d | 🟢 |
+| task_0_7_5 | Calculator tool (basic math operations) | 1.5 | 0.5d | 🟢 |
 | task_0_7_6 | Timer/reminder tool (local notifications) | 2.0 | 1d | 🔴 |
 | task_0_7_7 | Web search tool (DuckDuckGo API) | 2.3 | 1d | 🔴 |
 
 > **Note**: Local tools work offline without external API dependencies (except web search)
 > **Ollama models with tool support**: qwen2.5, llama3.1, mistral
+> **Implemented (a103d6e)**: Tool framework in `src/tools.py`, integration in `iris_local.py`
 
 ---
 
@@ -503,11 +504,11 @@
 | **10. Context Optimization** | 5 | 🔍 Spike | After delegation (ARCH-009) |
 | **11. Native Memory** | 5 | 🔍 Spike | After tools - Python port |
 
-> **Last Updated**: 2025-12-05
+> **Last Updated**: 2025-12-06
 > **Focus**: Native Primary, Web Secondary
 > **Native MVP**: DearPyGui desktop app with local Ollama + faster-whisper + Kokoro
 > **Voice latency**: ~700ms round-trip (target <500ms)
-> **Current Work**: Local tool integration (Feature 0.7)
+> **Current Work**: Tool integration core complete (5/7 tasks); remaining: timer, web search
 
 ---
 
