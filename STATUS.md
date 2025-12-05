@@ -3,7 +3,7 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-05 (GUI VAD mode, ffmpeg fallback)
+**Last Updated**: 2025-12-05 (Desktop launcher, interruption architecture)
 **Current Phase**: Implementation (Native client development)
 **Version**: 0.1.0 (Pre-MVP)
 
@@ -236,6 +236,23 @@ None
 ---
 
 ## Recent Achievements (Last 2 Weeks)
+
+**Desktop Launcher & Interruption Architecture (2025-12-05)**
+- **Desktop launcher**: `iris-local.desktop` + `iris-local-launcher.sh` for dock integration
+  - Icon: `assets/iris-icon.png` (blue circle with IRIS text)
+  - Launches GUI with ffmpeg audio mode automatically
+  - Installs to `~/.local/share/applications/`
+- **Interruption infrastructure** (barge-in support):
+  - Added `InterruptionEvent` dataclass to track context during interruptions
+  - State tracking: `_is_speaking`, `_interrupt_requested`, `_last_interruption`
+  - Interruptible playback: Audio plays in 100ms chunks with interrupt checking
+  - VAD monitoring during TTS: Detects when user starts speaking mid-response
+  - Context annotation: Next LLM prompt includes what was intended vs what was spoken
+  - Based on design in `specs/DESIGN-adaptive-verbosity.md`
+- **Graceful shutdown**: Ctrl+C handler via SIGINT/SIGTERM signals in GUI
+- **Distribution planning** (documented in ISSUES.md):
+  - ASP-004: Self-hosted APT repository (Brave pattern) for Ubuntu
+  - ASP-005: Product flavors (Star Atlas vs generic assistant)
 
 **Python Native Client - iris-local (2025-12-05)**
 - **New client**: `packages/voice-backend/iris_local.py` - native Python voice client

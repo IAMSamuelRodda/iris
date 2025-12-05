@@ -522,6 +522,129 @@ IRIS Provides:
 
 ---
 
+## Aspirational Features (Distribution & Packaging)
+
+### ASP-004: Linux Distribution via Self-Hosted APT Repository
+**Type**: Packaging | **Priority**: Future
+**Origin**: Riff session 2025-12-05
+
+**Vision**: Enable `apt install iris-local` for Ubuntu users via self-hosted repository.
+
+**Why APT (not Snap)**:
+- No sandbox restrictions (Snap blocks some audio/hardware access)
+- Standard Ubuntu UX (`apt install/remove/upgrade`)
+- Auto-updates via normal apt mechanisms
+- Full system access for GPU, audio devices
+
+**Implementation (Brave browser pattern)**:
+```bash
+# One-time setup (user runs once)
+curl -fsSL https://iris.arcforge.dev/setup-repo.sh | sudo bash
+
+# Then forever after:
+sudo apt install iris-local    # Install
+sudo apt upgrade iris-local    # Update
+sudo apt remove iris-local     # Uninstall
+```
+
+**Components Needed**:
+1. `.deb` package structure
+2. GPG signing key for package authenticity
+3. Package hosting (GitHub Releases or S3)
+4. Setup script that adds repo + key
+5. GitHub Action to auto-build .deb on release
+
+**Package Contents (~2-3GB fully bundled)**:
+- Python + all pip dependencies
+- Whisper STT model (~150MB)
+- Kokoro TTS model (~350MB)
+- Silero VAD model (~10MB)
+- ffmpeg, PortAudio dependencies
+- Desktop launcher + icon
+
+**User Still Needs (external)**:
+- Ollama + LLM model (~4GB for qwen2.5:7b)
+- NVIDIA drivers (system-specific)
+
+**Alternative: Install Script**:
+Simpler approach for initial distribution:
+```bash
+curl -fsSL https://iris.arcforge.dev/install.sh | bash
+```
+Downloads ~3GB, installs everything, creates desktop entry.
+
+**Trade-offs**:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **APT repo** | Standard UX, auto-updates | Complex setup, hosting costs |
+| **Install script** | Simple, quick to implement | No auto-update, less "official" |
+| **Snap** | Bundles everything | Sandbox issues, large size |
+| **AppImage** | Single portable file | No auto-update, large |
+
+**Recommendation**: Start with install script for early users, graduate to APT repo when user base grows.
+
+**Status**: 🔮 Aspirational (post-MVP, post initial user validation)
+
+---
+
+### ASP-005: Product Flavors (Star Atlas vs Generic Assistant)
+**Type**: Product | **Priority**: Future
+**Origin**: Riff session 2025-12-05
+
+**Vision**: Offer IRIS as both a Star Atlas-specific assistant AND a generic voice assistant with tools.
+
+**Rationale**:
+- Current implementation is tightly coupled to Star Atlas persona/tools
+- Many users might want the voice + tools architecture without game specifics
+- Broader market = more users = more feedback
+
+**Proposed Flavors**:
+
+| Flavor | Persona | Tools | Target User |
+|--------|---------|-------|-------------|
+| **IRIS (Star Atlas)** | "Guy in the chair" | Fleet, wallet, SAGE tools | Star Atlas players |
+| **IRIS (Generic)** | Helpful assistant | File, web, shell, calendar | Developers, power users |
+| **IRIS (Custom)** | User-defined | Plugin architecture | Builders |
+
+**Implementation Approach**:
+```
+iris-core/           # Shared: audio, VAD, STT, TTS, LLM integration
+iris-staratlas/      # Star Atlas persona + tools
+iris-assistant/      # Generic assistant persona + tools
+iris-plugins/        # Plugin architecture for custom tools
+```
+
+**Configuration**:
+```yaml
+# ~/.config/iris/config.yaml
+flavor: staratlas  # or: generic, custom
+persona:
+  name: "IRIS"
+  style: "guy_in_chair"  # or: professional, casual, custom
+tools:
+  enabled:
+    - fleet_status
+    - wallet_balance
+  disabled:
+    - file_operations
+```
+
+**Key Decisions Needed**:
+1. How much Star Atlas code is entangled with core?
+2. Plugin architecture for tools (MCP-style?)
+3. Persona customization depth (just name? or full system prompt?)
+4. Packaging: one binary with flags, or separate packages?
+
+**Prerequisites**:
+- Stable core architecture (current Python GUI)
+- Clear separation of concerns in codebase
+- User feedback on desired generic tools
+
+**Status**: 🔮 Aspirational (post-MVP, requires architecture refactor)
+
+---
+
 ## Aspirational Features (Native Client)
 
 ### ASP-003: Native Compiled Client (Rust/C++)

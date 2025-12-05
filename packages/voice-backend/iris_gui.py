@@ -36,6 +36,7 @@ import os
 import sys
 import time
 import queue
+import signal
 import threading
 import logging
 from dataclasses import dataclass, field
@@ -586,27 +587,41 @@ class IrisGUI:
             process.wait()
 
     def _process_vad_audio(self, audio: np.ndarray):
-        """Process audio captured by VAD."""
+        """Process audio captured by VAD with interruption support."""
         try:
             self._set_pipeline_status("stt", "active")
+            self._update_status("Processing...", self.COLOR_ACCENT)
 
-            # STT
+            # Use full pipeline with interruption support
+            # First transcribe to show user message
             text = self.iris.transcribe(audio)
             if text.strip():
-                self.add_message("user", text)
+                # Fill in user_interruption if this was an interruption
+                if self.iris._last_interruption:
+                    self.iris._last_interruption.user_interruption = text
 
-                # LLM
+                self.add_message("user", text)
                 self._set_pipeline_status("stt", "done")
                 self._set_pipeline_status("llm", "active")
 
+                # Process with interruption enabled (uses new process_voice)
+                # Note: We pass raw audio again since process_voice does its own STT
+                # But we've already shown the user message, so just call LLM directly
                 response = self.iris._call_llm(text)
 
-                # TTS
                 self._set_pipeline_status("llm", "done")
                 self._set_pipeline_status("tts", "active")
 
                 self.add_message("assistant", response)
-                self.iris.speak(response)
+
+                # Speak with interruption monitoring
+                self.iris._start_vad_monitor()
+                self.iris._is_speaking = True
+                try:
+                    self.iris.speak(response)
+                finally:
+                    self.iris._is_speaking = False
+                    self.iris._stop_vad_monitor()
 
                 self._set_pipeline_status("tts", "done")
             else:
@@ -681,19 +696,32 @@ class IrisGUI:
     # ==========================================================================
 
     def run(self):
-        """Run the GUI main loop."""
+        """Run the GUI main loop with graceful shutdown on Ctrl+C."""
         self._running = True
+
+        # Setup signal handler for graceful quit
+        def signal_handler(signum, frame):
+            logger.info("[GUI] Received shutdown signal")
+            self.stop()
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
 
         # Create IRIS instance if needed
         self._create_iris()
 
-        while dpg.is_dearpygui_running() and self._running:
-            # Process any pending updates
-            self._process_updates()
+        try:
+            while dpg.is_dearpygui_running() and self._running:
+                # Process any pending updates
+                self._process_updates()
 
-            dpg.render_dearpygui_frame()
-
-        dpg.destroy_context()
+                dpg.render_dearpygui_frame()
+        except KeyboardInterrupt:
+            logger.info("[GUI] Keyboard interrupt - shutting down")
+        finally:
+            self._stop_vad_listening()
+            dpg.destroy_context()
+            logger.info("[GUI] Shutdown complete")
 
     def _process_updates(self):
         """Process any pending UI updates."""

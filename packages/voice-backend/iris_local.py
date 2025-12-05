@@ -382,16 +382,67 @@ class AudioIO:
 
         self.sd.play(audio, sample_rate, device=self.config.output_device)
 
+    def play_interruptible(self, audio: np.ndarray, sample_rate: int = None,
+                          check_interrupt: callable = None) -> int:
+        """
+        Play audio with interrupt checking.
+
+        Args:
+            audio: Audio samples
+            sample_rate: Sample rate
+            check_interrupt: Callable returning True if playback should stop
+
+        Returns:
+            Number of samples actually played before interruption (or total if completed)
+        """
+        if sample_rate is None:
+            sample_rate = self.config.sample_rate_out
+
+        if audio.dtype == np.int16:
+            audio = audio.astype(np.float32) / 32768.0
+
+        # Play in chunks, checking for interruption
+        chunk_duration = 0.1  # 100ms chunks
+        chunk_samples = int(sample_rate * chunk_duration)
+        samples_played = 0
+
+        for i in range(0, len(audio), chunk_samples):
+            if check_interrupt and check_interrupt():
+                self.sd.stop()
+                logger.info(f"[Audio] Playback interrupted at {samples_played/sample_rate:.2f}s")
+                return samples_played
+
+            chunk = audio[i:i + chunk_samples]
+            self.sd.play(chunk, sample_rate, device=self.config.output_device)
+            self.sd.wait()
+            samples_played += len(chunk)
+
+        return samples_played
+
+    def stop_playback(self):
+        """Stop any ongoing playback."""
+        self.sd.stop()
+
 
 # ==============================================================================
 # Voice Pipeline
 # ==============================================================================
+
+@dataclass
+class InterruptionEvent:
+    """Tracks interruption context for natural conversation flow."""
+    intended_response: str      # Full response IRIS was going to say
+    spoken_up_to: str           # What user actually heard
+    user_interruption: str      # What they said (filled after STT)
+    timestamp: float = 0.0
+
 
 class IrisLocal:
     """
     Main IRIS Local voice pipeline.
 
     Orchestrates: Audio → VAD → STT → LLM → TTS → Audio
+    Supports barge-in interruption for natural conversation.
     """
 
     def __init__(self, config: IrisConfig = None):
@@ -403,6 +454,13 @@ class IrisLocal:
         self._stt = None
         self._tts = None
         self._warmed_up = False
+
+        # Interruption handling
+        self._is_speaking = False
+        self._interrupt_requested = False
+        self._last_interruption: InterruptionEvent | None = None
+        self._vad_monitor_thread: threading.Thread | None = None
+        self._vad_monitor_active = False
 
     @property
     def stt(self):
@@ -455,6 +513,63 @@ class IrisLocal:
         logger.info("=" * 50)
 
         self._warmed_up = True
+
+    def _start_vad_monitor(self):
+        """Start VAD monitoring for barge-in detection during TTS playback."""
+        import subprocess
+
+        self._vad_monitor_active = True
+        self._interrupt_requested = False
+
+        def monitor_loop():
+            # Use ffmpeg to capture audio for VAD
+            cmd = [
+                "ffmpeg", "-f", "pulse", "-i", "default",
+                "-ar", "16000", "-ac", "1", "-f", "s16le",
+                "-loglevel", "error", "pipe:1"
+            ]
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            chunk_samples = 512
+            bytes_per_chunk = chunk_samples * 2
+            speech_frames = 0
+            speech_threshold = 3  # Need 3 consecutive speech frames (~100ms)
+
+            try:
+                while self._vad_monitor_active and process.poll() is None:
+                    data = process.stdout.read(bytes_per_chunk)
+                    if not data:
+                        break
+
+                    audio_int16 = np.frombuffer(data, dtype=np.int16)
+                    chunk = audio_int16.astype(np.float32) / 32768.0
+
+                    is_speech, confidence = self.vad.is_speech(chunk)
+
+                    if is_speech and confidence > 0.7:  # Higher threshold for interruption
+                        speech_frames += 1
+                        if speech_frames >= speech_threshold:
+                            logger.info(f"[VAD] Barge-in detected! (confidence: {confidence:.2f})")
+                            self._interrupt_requested = True
+                            break
+                    else:
+                        speech_frames = 0
+            finally:
+                process.terminate()
+                process.wait()
+
+        self._vad_monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+        self._vad_monitor_thread.start()
+
+    def _stop_vad_monitor(self):
+        """Stop VAD monitoring."""
+        self._vad_monitor_active = False
+        if self._vad_monitor_thread:
+            self._vad_monitor_thread.join(timeout=0.5)
+            self._vad_monitor_thread = None
+
+    def _check_interrupt(self) -> bool:
+        """Check if interruption was requested."""
+        return self._interrupt_requested
 
     def _call_llm_stream(self, prompt: str) -> Generator[str, None, None]:
         """
@@ -560,14 +675,30 @@ class IrisLocal:
             audio = (result.audio.squeeze() * 32767).astype(np.int16)
             self.audio.play(audio, result.sample_rate)
 
-    def process_voice(self, audio: np.ndarray) -> str:
+    def process_voice(self, audio: np.ndarray, allow_interrupt: bool = True) -> str:
         """
-        Full voice pipeline: STT → LLM → TTS
+        Full voice pipeline: STT → LLM → TTS with barge-in support.
+
+        Args:
+            audio: Input audio from user
+            allow_interrupt: If True, monitor for user interruption during TTS
 
         Returns:
-            LLM response text
+            LLM response text (or partial if interrupted)
         """
         total_start = time.perf_counter()
+
+        # Check for previous interruption context
+        interruption_context = ""
+        if self._last_interruption:
+            ie = self._last_interruption
+            interruption_context = (
+                f"\n[Note: Your previous response was interrupted. "
+                f"You intended to say: \"{ie.intended_response[:100]}...\" "
+                f"but user only heard: \"{ie.spoken_up_to}\". "
+                f"They then said: \"{ie.user_interruption}\"]"
+            )
+            self._last_interruption = None
 
         # STT
         text = self.transcribe(audio)
@@ -575,7 +706,10 @@ class IrisLocal:
             logger.info("[Pipeline] No speech detected")
             return ""
 
-        # LLM (streaming) + TTS (progressive)
+        # Add interruption context if present
+        prompt = text + interruption_context
+
+        # LLM (streaming) + TTS (progressive with interruption)
         logger.info(f"[LLM] Generating response...")
 
         llm_start = time.perf_counter()
@@ -584,34 +718,92 @@ class IrisLocal:
         # Accumulate for sentence detection
         buffer = ""
         full_response = ""
+        spoken_text = ""
+        was_interrupted = False
         import re
 
-        for token in self._call_llm_stream(text):
-            if first_token_time is None:
-                first_token_time = (time.perf_counter() - llm_start) * 1000
-                logger.info(f"[LLM] First token: {first_token_time:.0f}ms")
+        # Start VAD monitoring for barge-in if enabled
+        if allow_interrupt:
+            self._start_vad_monitor()
+            self._is_speaking = True
 
-            buffer += token
-            full_response += token
+        try:
+            for token in self._call_llm_stream(prompt):
+                # Check for interruption
+                if allow_interrupt and self._check_interrupt():
+                    logger.info("[Pipeline] User interrupted - stopping response")
+                    was_interrupted = True
+                    self.audio.stop_playback()
+                    break
 
-            # Check for complete sentence
-            match = re.match(r'(.+?[.!?])\s*', buffer)
-            if match:
-                sentence = match.group(1)
-                buffer = buffer[len(match.group(0)):]
+                if first_token_time is None:
+                    first_token_time = (time.perf_counter() - llm_start) * 1000
+                    logger.info(f"[LLM] First token: {first_token_time:.0f}ms")
 
-                # Speak sentence immediately
-                logger.info(f"[TTS] Speaking: \"{sentence}\"")
-                result = self.tts.synthesize(sentence)
-                audio = (result.audio.squeeze() * 32767).astype(np.int16)
-                self.audio.play(audio, result.sample_rate)
+                buffer += token
+                full_response += token
 
-        # Speak any remaining text
-        if buffer.strip():
-            logger.info(f"[TTS] Speaking final: \"{buffer}\"")
-            result = self.tts.synthesize(buffer)
-            audio = (result.audio.squeeze() * 32767).astype(np.int16)
-            self.audio.play(audio, result.sample_rate)
+                # Check for complete sentence
+                match = re.match(r'(.+?[.!?])\s*', buffer)
+                if match:
+                    sentence = match.group(1)
+                    buffer = buffer[len(match.group(0)):]
+
+                    # Check interrupt before speaking each sentence
+                    if allow_interrupt and self._check_interrupt():
+                        logger.info("[Pipeline] User interrupted before sentence")
+                        was_interrupted = True
+                        break
+
+                    # Speak sentence with interrupt checking
+                    logger.info(f"[TTS] Speaking: \"{sentence}\"")
+                    result = self.tts.synthesize(sentence)
+                    tts_audio = (result.audio.squeeze() * 32767).astype(np.int16)
+
+                    if allow_interrupt:
+                        samples_played = self.audio.play_interruptible(
+                            tts_audio, result.sample_rate, self._check_interrupt
+                        )
+                        # Track what was actually spoken
+                        if samples_played < len(tts_audio):
+                            # Partial playback - estimate spoken portion
+                            ratio = samples_played / len(tts_audio)
+                            chars_spoken = int(len(sentence) * ratio)
+                            spoken_text += sentence[:chars_spoken]
+                            was_interrupted = True
+                            break
+                        else:
+                            spoken_text += sentence + " "
+                    else:
+                        self.audio.play(tts_audio, result.sample_rate)
+                        spoken_text += sentence + " "
+
+            # Speak any remaining text (if not interrupted)
+            if not was_interrupted and buffer.strip():
+                logger.info(f"[TTS] Speaking final: \"{buffer}\"")
+                result = self.tts.synthesize(buffer)
+                tts_audio = (result.audio.squeeze() * 32767).astype(np.int16)
+
+                if allow_interrupt:
+                    self.audio.play_interruptible(tts_audio, result.sample_rate, self._check_interrupt)
+                else:
+                    self.audio.play(tts_audio, result.sample_rate)
+                spoken_text += buffer
+
+        finally:
+            self._is_speaking = False
+            if allow_interrupt:
+                self._stop_vad_monitor()
+
+        # Store interruption event for next turn
+        if was_interrupted:
+            self._last_interruption = InterruptionEvent(
+                intended_response=full_response + buffer,  # What we were going to say
+                spoken_up_to=spoken_text.strip(),
+                user_interruption="",  # Will be filled by next STT
+                timestamp=time.time()
+            )
+            logger.info(f"[Pipeline] Interrupted. Spoken: \"{spoken_text[:50]}...\"")
 
         total_elapsed = (time.perf_counter() - total_start) * 1000
         logger.info(f"[Pipeline] Total: {total_elapsed:.0f}ms")

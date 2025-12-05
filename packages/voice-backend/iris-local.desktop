@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=IRIS Local
+Comment=Voice assistant for Star Atlas - Native Python client
+Exec=/home/x-forge/repos/iris/packages/voice-backend/iris-local-launcher.sh
+Icon=/home/x-forge/repos/iris/packages/voice-backend/assets/iris-icon.png
+Terminal=false
+Categories=Utility;Audio;
+StartupNotify=true
+StartupWMClass=IRIS Local
