@@ -385,7 +385,7 @@ class AudioIO:
     def play_interruptible(self, audio: np.ndarray, sample_rate: int = None,
                           check_interrupt: callable = None) -> int:
         """
-        Play audio with interrupt checking.
+        Play audio with interrupt checking using streaming output.
 
         Args:
             audio: Audio samples
@@ -401,21 +401,36 @@ class AudioIO:
         if audio.dtype == np.int16:
             audio = audio.astype(np.float32) / 32768.0
 
-        # Play in chunks, checking for interruption
-        chunk_duration = 0.1  # 100ms chunks
-        chunk_samples = int(sample_rate * chunk_duration)
+        # Use streaming output for smooth playback with interrupt checking
         samples_played = 0
+        interrupted = False
+        check_interval = 0.05  # Check for interrupt every 50ms
 
-        for i in range(0, len(audio), chunk_samples):
+        # Start playback
+        self.sd.play(audio, sample_rate, device=self.config.output_device)
+
+        # Monitor for interrupts while playing
+        total_duration = len(audio) / sample_rate
+        start_time = time.perf_counter()
+
+        while True:
+            elapsed = time.perf_counter() - start_time
+            if elapsed >= total_duration:
+                break
+
+            # Check for interrupt
             if check_interrupt and check_interrupt():
                 self.sd.stop()
-                logger.info(f"[Audio] Playback interrupted at {samples_played/sample_rate:.2f}s")
-                return samples_played
+                samples_played = int(elapsed * sample_rate)
+                interrupted = True
+                logger.info(f"[Audio] Playback interrupted at {elapsed:.2f}s")
+                break
 
-            chunk = audio[i:i + chunk_samples]
-            self.sd.play(chunk, sample_rate, device=self.config.output_device)
-            self.sd.wait()
-            samples_played += len(chunk)
+            time.sleep(check_interval)
+
+        if not interrupted:
+            self.sd.wait()  # Wait for playback to finish
+            samples_played = len(audio)
 
         return samples_played
 
@@ -461,6 +476,10 @@ class IrisLocal:
         self._last_interruption: InterruptionEvent | None = None
         self._vad_monitor_thread: threading.Thread | None = None
         self._vad_monitor_active = False
+
+        # Conversation history (last N turns)
+        self._conversation_history: list[dict] = []
+        self._max_history_turns = 10  # Keep last 10 exchanges
 
     @property
     def stt(self):
@@ -607,9 +626,21 @@ class IrisLocal:
                 if data.get("done", False):
                     break
 
+    def add_to_history(self, role: str, content: str):
+        """Add a message to conversation history."""
+        self._conversation_history.append({"role": role, "content": content})
+        # Trim to max turns (each turn = user + assistant = 2 messages)
+        max_messages = self._max_history_turns * 2
+        if len(self._conversation_history) > max_messages:
+            self._conversation_history = self._conversation_history[-max_messages:]
+
+    def clear_history(self):
+        """Clear conversation history."""
+        self._conversation_history = []
+
     def _call_llm(self, prompt: str, stream: bool = False) -> str:
         """
-        Call Ollama LLM (non-streaming).
+        Call Ollama LLM with conversation history.
 
         Args:
             prompt: User prompt
@@ -622,10 +653,33 @@ class IrisLocal:
             # For streaming, caller should use _call_llm_stream directly
             return "".join(self._call_llm_stream(prompt))
 
+        # Build messages with history
+        messages = [{"role": "system", "content": self.config.system_prompt}]
+
+        # Add interruption context if present
+        if self._last_interruption:
+            ie = self._last_interruption
+            interruption_note = {
+                "role": "system",
+                "content": (
+                    f"[Interruption context: Your previous response was interrupted. "
+                    f"You intended to say: \"{ie.intended_response}\" "
+                    f"but user only heard: \"{ie.spoken_up_to}\". "
+                    f"They then interrupted with what follows.]"
+                )
+            }
+            messages.append(interruption_note)
+            self._last_interruption = None
+
+        # Add conversation history
+        messages.extend(self._conversation_history)
+
+        # Add current user message
+        messages.append({"role": "user", "content": prompt})
+
         payload = {
             "model": self.config.ollama_model,
-            "prompt": prompt,
-            "system": self.config.system_prompt,
+            "messages": messages,
             "stream": False,
             "options": {
                 "num_predict": self.config.max_tokens,
@@ -633,11 +687,18 @@ class IrisLocal:
         }
 
         response = requests.post(
-            f"{self.config.ollama_url}/api/generate",
+            f"{self.config.ollama_url}/api/chat",
             json=payload,
             timeout=60,
         )
-        return response.json().get("response", "").strip()
+        result = response.json()
+        assistant_response = result.get("message", {}).get("content", "").strip()
+
+        # Add to history
+        self.add_to_history("user", prompt)
+        self.add_to_history("assistant", assistant_response)
+
+        return assistant_response
 
     def transcribe(self, audio: np.ndarray) -> str:
         """Transcribe audio to text."""
