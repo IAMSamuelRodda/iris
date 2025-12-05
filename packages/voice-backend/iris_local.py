@@ -543,6 +543,10 @@ class IrisLocal:
                     audio_int16 = np.frombuffer(data, dtype=np.int16)
                     chunk = audio_int16.astype(np.float32) / 32768.0
 
+                    # Skip chunks that are too short for VAD (min 512 samples at 16kHz)
+                    if len(chunk) < 512:
+                        continue
+
                     is_speech, confidence = self.vad.is_speech(chunk)
 
                     if is_speech and confidence > 0.7:  # Higher threshold for interruption
@@ -644,14 +648,24 @@ class IrisLocal:
         logger.info(f"[STT] {elapsed:.0f}ms: \"{result.text}\"")
         return result.text
 
-    def speak(self, text: str, stream_sentences: bool = True):
+    def speak(self, text: str, stream_sentences: bool = True, interruptible: bool = None) -> str:
         """
         Synthesize and play text.
 
         Args:
             text: Text to speak
             stream_sentences: If True, play as sentences complete (lower latency)
+            interruptible: If True, check for barge-in interrupts. Defaults to _is_speaking state.
+
+        Returns:
+            Text that was actually spoken (may be truncated if interrupted)
         """
+        # Default to current speaking state for interrupt checking
+        if interruptible is None:
+            interruptible = self._is_speaking
+
+        spoken_text = []
+
         if stream_sentences:
             # Split into sentences for progressive playback
             import re
@@ -659,13 +673,36 @@ class IrisLocal:
 
             for sentence in sentences:
                 if sentence.strip():
+                    # Check for interrupt before each sentence
+                    if interruptible and self._interrupt_requested:
+                        logger.info(f"[TTS] Interrupted before sentence: \"{sentence[:30]}...\"")
+                        break
+
                     start = time.perf_counter()
                     result = self.tts.synthesize(sentence)
                     elapsed = (time.perf_counter() - start) * 1000
                     logger.debug(f"[TTS] {elapsed:.0f}ms for \"{sentence[:30]}...\"")
 
                     audio = (result.audio.squeeze() * 32767).astype(np.int16)
-                    self.audio.play(audio, result.sample_rate)
+
+                    if interruptible:
+                        samples_played = self.audio.play_interruptible(
+                            audio, result.sample_rate, self._check_interrupt
+                        )
+                        # Calculate how much of the sentence was spoken
+                        if samples_played < len(audio):
+                            # Partial playback - estimate words spoken
+                            fraction = samples_played / len(audio)
+                            words = sentence.split()
+                            words_spoken = int(len(words) * fraction)
+                            spoken_text.append(' '.join(words[:max(1, words_spoken)]) + "—")
+                            logger.info(f"[TTS] Interrupted mid-sentence at {fraction:.0%}")
+                            break
+                        else:
+                            spoken_text.append(sentence)
+                    else:
+                        self.audio.play(audio, result.sample_rate)
+                        spoken_text.append(sentence)
         else:
             start = time.perf_counter()
             result = self.tts.synthesize(text)
@@ -673,7 +710,23 @@ class IrisLocal:
             logger.info(f"[TTS] {elapsed:.0f}ms total")
 
             audio = (result.audio.squeeze() * 32767).astype(np.int16)
-            self.audio.play(audio, result.sample_rate)
+
+            if interruptible:
+                samples_played = self.audio.play_interruptible(
+                    audio, result.sample_rate, self._check_interrupt
+                )
+                if samples_played < len(audio):
+                    fraction = samples_played / len(audio)
+                    words = text.split()
+                    words_spoken = int(len(words) * fraction)
+                    spoken_text.append(' '.join(words[:max(1, words_spoken)]) + "—")
+                else:
+                    spoken_text.append(text)
+            else:
+                self.audio.play(audio, result.sample_rate)
+                spoken_text.append(text)
+
+        return ' '.join(spoken_text)
 
     def process_voice(self, audio: np.ndarray, allow_interrupt: bool = True) -> str:
         """

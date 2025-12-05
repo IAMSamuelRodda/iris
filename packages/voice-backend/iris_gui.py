@@ -541,6 +541,10 @@ class IrisGUI:
                 audio_int16 = np.frombuffer(data, dtype=np.int16)
                 chunk = audio_int16.astype(np.float32) / 32768.0
 
+                # Skip chunks that are too short for VAD (min 512 samples at 16kHz)
+                if len(chunk) < 512:
+                    continue
+
                 # Update waveform display
                 self._audio_queue.put(chunk)
 
@@ -618,7 +622,20 @@ class IrisGUI:
                 self.iris._start_vad_monitor()
                 self.iris._is_speaking = True
                 try:
-                    self.iris.speak(response)
+                    spoken_text = self.iris.speak(response)
+
+                    # Check if we were interrupted
+                    if self.iris._interrupt_requested and spoken_text != response:
+                        from iris_local import InterruptionEvent
+                        import time
+                        self.iris._last_interruption = InterruptionEvent(
+                            intended_response=response,
+                            spoken_up_to=spoken_text,
+                            user_interruption="",  # Will be filled by next STT
+                            timestamp=time.time()
+                        )
+                        logger.info(f"[GUI] Interruption recorded. Spoken: \"{spoken_text[:50]}...\"")
+                        self._update_status("Interrupted! Listening...", self.COLOR_ACCENT)
                 finally:
                     self.iris._is_speaking = False
                     self.iris._stop_vad_monitor()
