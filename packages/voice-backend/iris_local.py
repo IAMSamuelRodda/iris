@@ -481,6 +481,11 @@ class IrisLocal:
         self._conversation_history: list[dict] = []
         self._max_history_turns = 10  # Keep last 10 exchanges
 
+        # Context window tracking
+        self._context_used = 0  # Tokens used in last request (prompt_eval_count)
+        self._context_max = 8192  # Default, updated from model info
+        self._total_tokens_session = 0  # Running total for session
+
     @property
     def stt(self):
         """Lazy-load STT."""
@@ -640,6 +645,17 @@ class IrisLocal:
     def clear_history(self):
         """Clear conversation history."""
         self._conversation_history = []
+        self._total_tokens_session = 0
+
+    def get_context_stats(self) -> dict:
+        """Get current context window usage stats."""
+        return {
+            "context_used": self._context_used,
+            "context_max": self._context_max,
+            "session_tokens": self._total_tokens_session,
+            "history_turns": len(self._conversation_history) // 2,
+            "max_history_turns": self._max_history_turns,
+        }
 
     def _call_llm(self, prompt: str, stream: bool = False) -> str:
         """
@@ -696,6 +712,15 @@ class IrisLocal:
         )
         result = response.json()
         assistant_response = result.get("message", {}).get("content", "").strip()
+
+        # Track token usage from Ollama response
+        prompt_tokens = result.get("prompt_eval_count", 0)
+        completion_tokens = result.get("eval_count", 0)
+        self._context_used = prompt_tokens
+        self._total_tokens_session += prompt_tokens + completion_tokens
+
+        # Log token usage
+        logger.info(f"[LLM] Tokens: {prompt_tokens} prompt + {completion_tokens} completion = {prompt_tokens + completion_tokens} total (session: {self._total_tokens_session})")
 
         # Add to history
         self.add_to_history("user", prompt)

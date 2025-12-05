@@ -280,6 +280,10 @@ class IrisGUI:
             dpg.add_spacer(width=10)
             self._create_status_indicator("TTS", "tts_indicator")
 
+        # Context window usage
+        dpg.add_spacer(height=5)
+        dpg.add_text("Context: 0 tokens (0 turns)", tag="context_stats", color=self.COLOR_TEXT_DIM)
+
     def _create_status_indicator(self, label: str, tag: str):
         """Create a status indicator dot with label."""
         with dpg.group(horizontal=True):
@@ -614,6 +618,7 @@ class IrisGUI:
                 response = self.iris._call_llm(text)
 
                 self._set_pipeline_status("llm", "done")
+                self._update_context_stats()
                 self._set_pipeline_status("tts", "active")
 
                 self.add_message("assistant", response)
@@ -678,6 +683,12 @@ class IrisGUI:
             dpg.configure_item(tag, color=self.COLOR_ERROR)
         else:  # idle
             dpg.configure_item(tag, color=self.COLOR_TEXT_DIM)
+
+    def _update_context_stats(self):
+        """Update the context window usage display."""
+        stats = self.iris.get_context_stats()
+        text = f"Context: {stats['session_tokens']:,} tokens ({stats['history_turns']}/{stats['max_history_turns']} turns)"
+        dpg.set_value("context_stats", text)
 
     def update_waveform(self, audio_data: np.ndarray):
         """Update the waveform display with new audio data."""
