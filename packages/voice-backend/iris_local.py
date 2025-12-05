@@ -51,6 +51,9 @@ from typing import Callable, Generator
 import numpy as np
 import requests
 
+# Tools module
+from src.tools import TOOLS, execute_tool, supports_tools
+
 # Setup cuDNN before other imports
 def _setup_cudnn():
     try:
@@ -85,10 +88,15 @@ SYSTEM_PROMPT_BASE = """You are IRIS, a voice assistant for Star Atlas players.
 CRITICAL RULES:
 - Keep responses SHORT (1-2 sentences max) - they will be spoken aloud
 - NEVER use placeholder text like [Event Name], [Time], [Location], etc.
-- NEVER pretend you can access real-time data, calendars, or external systems
 - If you don't know something specific, say so directly
 - No markdown, bullet points, or special formatting
 - Speak naturally as if in conversation
+
+TOOLS AVAILABLE:
+- get_current_time: Get the current time and date (use for "what time is it", "what day is it")
+- calculate: Do math calculations (use for any arithmetic, percentages, etc.)
+
+Use tools when the user asks about time/date or needs calculations. After getting tool results, give a natural spoken response.
 
 You're a helpful companion who chats about Star Atlas, space gaming, and general topics.
 You DON'T have access to: fleet data, wallet balances, real-time prices, or game APIs.
@@ -173,6 +181,7 @@ class IrisConfig:
     ollama_url: str = os.getenv("OLLAMA_URL", "http://localhost:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
     max_tokens: int = 150
+    enable_tools: bool = True  # Enable Ollama tool calling
 
     # STT
     stt_model: str = os.getenv("STT_MODEL_SIZE", "base")
@@ -737,7 +746,7 @@ class IrisLocal:
 
     def _call_llm(self, prompt: str, stream: bool = False) -> str:
         """
-        Call Ollama LLM with conversation history.
+        Call Ollama LLM with conversation history and tool support.
 
         Args:
             prompt: User prompt
@@ -775,6 +784,12 @@ class IrisLocal:
         # Add current user message
         messages.append({"role": "user", "content": prompt})
 
+        # Check if tools are enabled and model supports them
+        use_tools = (
+            self.config.enable_tools
+            and supports_tools(self.config.ollama_model)
+        )
+
         payload = {
             "model": self.config.ollama_model,
             "messages": messages,
@@ -784,13 +799,27 @@ class IrisLocal:
             },
         }
 
+        # Add tools if enabled
+        if use_tools:
+            payload["tools"] = TOOLS
+            logger.debug(f"[LLM] Tools enabled: {len(TOOLS)} tools available")
+
         response = requests.post(
             f"{self.config.ollama_url}/api/chat",
             json=payload,
             timeout=60,
         )
         result = response.json()
-        assistant_response = result.get("message", {}).get("content", "").strip()
+
+        # Check for tool calls
+        message = result.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+
+        if tool_calls:
+            # Execute tools and get final response
+            assistant_response = self._handle_tool_calls(messages, message, tool_calls)
+        else:
+            assistant_response = message.get("content", "").strip()
 
         # Track token usage from Ollama response
         prompt_tokens = result.get("prompt_eval_count", 0)
@@ -806,6 +835,70 @@ class IrisLocal:
         self.add_to_history("assistant", assistant_response)
 
         return assistant_response
+
+    def _handle_tool_calls(
+        self,
+        messages: list[dict],
+        assistant_message: dict,
+        tool_calls: list[dict],
+    ) -> str:
+        """
+        Execute tool calls and get final response from LLM.
+
+        Args:
+            messages: Conversation messages so far
+            assistant_message: The assistant's message with tool calls
+            tool_calls: List of tool calls to execute
+
+        Returns:
+            Final assistant response after tool execution
+        """
+        # Add assistant's tool call message
+        messages.append(assistant_message)
+
+        # Execute each tool and add results
+        for tool_call in tool_calls:
+            func = tool_call.get("function", {})
+            tool_name = func.get("name", "unknown")
+            tool_args = func.get("arguments", {})
+
+            logger.info(f"[LLM] Tool call: {tool_name}({tool_args})")
+
+            # Execute the tool
+            tool_result = execute_tool(tool_name, tool_args)
+
+            # Add tool result to messages
+            messages.append({
+                "role": "tool",
+                "content": tool_result,
+            })
+
+        # Call LLM again for final response
+        payload = {
+            "model": self.config.ollama_model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "num_predict": self.config.max_tokens,
+            },
+        }
+
+        response = requests.post(
+            f"{self.config.ollama_url}/api/chat",
+            json=payload,
+            timeout=60,
+        )
+        result = response.json()
+        final_response = result.get("message", {}).get("content", "").strip()
+
+        # Track additional tokens from tool follow-up
+        prompt_tokens = result.get("prompt_eval_count", 0)
+        completion_tokens = result.get("eval_count", 0)
+        self._total_tokens_session += prompt_tokens + completion_tokens
+
+        logger.info(f"[LLM] Tool follow-up tokens: {prompt_tokens} + {completion_tokens}")
+
+        return final_response
 
     def transcribe(self, audio: np.ndarray) -> str:
         """Transcribe audio to text."""
