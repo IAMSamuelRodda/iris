@@ -555,6 +555,35 @@ class InterruptionEvent:
     timestamp: float = 0.0
 
 
+# Tool acknowledgment phrases for UX feedback (Feature 9.4)
+# Spoken before tool execution to provide immediate audio feedback
+TOOL_ACKNOWLEDGMENTS = {
+    # Meta-tool categories
+    "search": "Let me search for that.",
+    "tasks": "Updating your tasks.",
+    "reminders": "Working on that reminder.",
+    "memory": "Saving that to memory.",
+    # Specific actions within categories
+    "search.query": "Let me look that up.",
+    "tasks.add": "Adding that to your list.",
+    "tasks.complete": "Marking that done.",
+    "tasks.list": "Checking your tasks.",
+    "reminders.create": "Creating a reminder.",
+    "reminders.list": "Checking your reminders.",
+    "reminders.done": "Marking that complete.",
+    "memory.remember": "I'll remember that.",
+    "memory.recall": "Let me recall.",
+    "memory.forget": "Removing that.",
+    "memory.relate": "Noting that connection.",
+    "memory.summary": "Summarizing what I know.",
+    # Core tools
+    "get_current_time": "Checking the time.",
+    "calculate": "Calculating.",
+    # Meta-tool router
+    "iris": None,  # Acknowledgment depends on category/action (handled specially)
+}
+
+
 class IrisLocal:
     """
     Main IRIS Local voice pipeline.
@@ -856,6 +885,27 @@ class IrisLocal:
 
         return assistant_response
 
+    def _get_tool_acknowledgment(self, tool_name: str, tool_args: dict) -> str | None:
+        """
+        Get acknowledgment phrase for a tool call (Feature 9.4).
+
+        For the 'iris' meta-tool, looks up category.action for specific phrase.
+        Returns None if no acknowledgment should be spoken.
+        """
+        if tool_name == "iris":
+            # Meta-tool: look up category.action
+            category = tool_args.get("category", "")
+            action = tool_args.get("action", "")
+            # Try specific action first, fall back to category
+            key = f"{category}.{action}"
+            ack = TOOL_ACKNOWLEDGMENTS.get(key)
+            if ack:
+                return ack
+            return TOOL_ACKNOWLEDGMENTS.get(category)
+        else:
+            # Direct tool call
+            return TOOL_ACKNOWLEDGMENTS.get(tool_name)
+
     def _handle_tool_calls(
         self,
         messages: list[dict],
@@ -875,6 +925,17 @@ class IrisLocal:
         """
         # Add assistant's tool call message
         messages.append(assistant_message)
+
+        # Speak acknowledgment for first tool (UX feedback - Feature 9.4)
+        if tool_calls:
+            first_tool = tool_calls[0].get("function", {})
+            ack = self._get_tool_acknowledgment(
+                first_tool.get("name", ""),
+                first_tool.get("arguments", {})
+            )
+            if ack:
+                logger.info(f"[UX] Tool acknowledgment: \"{ack}\"")
+                self.speak(ack, stream_sentences=False, interruptible=False)
 
         # Execute each tool and add results
         for tool_call in tool_calls:
