@@ -3,7 +3,7 @@
 > **Purpose**: Track items needing attention before/during IRIS implementation
 > **Generated from**: specs/BLUEPRINT-project-staratlas-20251201.yaml
 
-**Last Updated**: 2025-12-05 (Streaming architecture riff session)
+**Last Updated**: 2025-12-06 (GUI UX improvements)
 
 ---
 
@@ -220,6 +220,48 @@ When users ramble, they often want to be *heard* first:
 - [ ] Integrate with narrator verbosity levels
 
 **References**: `specs/DESIGN-adaptive-verbosity.md`
+
+### GUI-001: Voice Style Selector in Native Client
+**Severity**: 🟡 Medium | **Created**: 2025-12-06
+**Component**: iris_local.py (DearPyGui)
+
+**Problem**: No way to view or change voice style in the GUI. User can't tell what style is active or switch between Normal/Formal/Concise/Immersive/Learning modes.
+
+**Requirements**:
+- [ ] Display current voice style in config panel
+- [ ] Dropdown or radio buttons to switch styles
+- [ ] Persist selection (localStorage equivalent for native client)
+- [ ] Apply style to system prompt dynamically
+
+**Reference**: Web app has this in `packages/web-app/src/components/Chat.tsx`
+
+### GUI-002: Show Acknowledgments in Conversation Transcript
+**Severity**: 🟡 Medium | **Created**: 2025-12-06
+**Component**: iris_local.py (DearPyGui)
+
+**Problem**: When IRIS says "Checking..." before a tool call, this acknowledgment is spoken but not shown in the conversation transcript panel.
+
+**Requirements**:
+- [ ] Display acknowledgment text in transcript when `[UX] LLM tool acknowledgment` fires
+- [ ] Visually distinguish from main responses (lighter text, prefix, or similar)
+
+### GUI-003: Streaming Activity Display (Claude.ai UX Study)
+**Severity**: 🟡 Medium | **Created**: 2025-12-06
+**Component**: iris_local.py (DearPyGui)
+
+**Problem**: Technical activity (tool calls, searches, memory operations) happens invisibly. User only sees final response. Claude.ai shows this activity with distinct formatting (thinking blocks, tool use indicators).
+
+**Research**:
+- [ ] Study Claude.ai's streaming activity UX via browser DevTools
+- [ ] Document patterns: thinking indicators, tool call display, result preview
+- [ ] Design equivalent for DearPyGui (collapsible sections, status line, etc.)
+
+**Implementation**:
+- [ ] Stream tool call info to conversation panel with distinct styling
+- [ ] Show tool name, parameters, and result summary
+- [ ] Collapsible or toggleable detail level
+
+**Reference**: Claude.ai's artifact and thinking display patterns
 
 ---
 

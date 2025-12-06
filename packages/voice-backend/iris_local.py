@@ -121,9 +121,9 @@ You're a helpful companion who chats about Star Atlas, space gaming, and general
 You DON'T have access to: fleet data, wallet balances, real-time prices, or game APIs.
 If asked about these, explain you're in local testing mode without those integrations."""
 
-# Model-specific prompts - keyed by model family (prefix match)
-# These are APPENDED to the base prompt for specific model quirks
-MODEL_PROMPTS: dict[str, str] = {
+# Model FAMILY prompts - keyed by prefix (e.g., "qwen" matches "qwen2.5:7b")
+# These are APPENDED to the base prompt for family-wide quirks
+MODEL_FAMILY_PROMPTS: dict[str, str] = {
     "qwen": """
 
 QWEN-SPECIFIC:
@@ -149,34 +149,71 @@ PHI-SPECIFIC:
 - Don't over-explain simple concepts""",
 }
 
+# Model-SPECIFIC prompts - keyed by exact model name (e.g., "qwen2.5:7b")
+# These provide additional guidance for specific model sizes/versions
+# Smaller models need more explicit guidance; larger models can infer more
+MODEL_SPECIFIC_PROMPTS: dict[str, str] = {
+    "qwen2.5:7b": """
+
+7B MODEL RULES:
+- USE TOOLS for: time, weather, search, reminders, memory, calculations
+- Say "Checking..." then CALL THE TOOL - don't just say you will
+- After tool result: answer directly ("It's 3pm" not "I found the time is 3pm")""",
+
+    "qwen2.5:3b": """
+
+STYLE (3B model guidance):
+- Very brief responses only
+- Tool acknowledgment: max 3 words (e.g., "Checking now")
+- Answer directly after tools, no narration""",
+}
+
 
 def get_system_prompt(model_name: str, log: bool = False) -> str:
     """
-    Build system prompt from base + model-specific additions.
+    Build system prompt from base + family + specific model additions.
+
+    Hierarchy (all applied if matched):
+    1. SYSTEM_PROMPT_BASE - always included
+    2. MODEL_FAMILY_PROMPTS - matched by prefix (e.g., "qwen" → qwen2.5:7b)
+    3. MODEL_SPECIFIC_PROMPTS - matched by exact name (e.g., "qwen2.5:7b")
+
+    Smaller models get more guidance; larger models rely on their capabilities.
 
     Args:
         model_name: Ollama model name (e.g., "qwen2.5:7b", "mistral:7b")
-        log: If True, log which model-specific prompt was used
+        log: If True, log which prompts were applied
 
     Returns:
         Combined system prompt
     """
     prompt = SYSTEM_PROMPT_BASE
-    matched_family = None
-
-    # Find matching model-specific prompt (prefix match)
     model_lower = model_name.lower()
-    for model_family, model_prompt in MODEL_PROMPTS.items():
-        if model_lower.startswith(model_family):
-            prompt += model_prompt
-            matched_family = model_family
+    matched_family = None
+    matched_specific = None
+
+    # Layer 2: Find matching family prompt (prefix match)
+    for family, family_prompt in MODEL_FAMILY_PROMPTS.items():
+        if model_lower.startswith(family):
+            prompt += family_prompt
+            matched_family = family
             break
 
+    # Layer 3: Find matching specific model prompt (exact match)
+    if model_lower in MODEL_SPECIFIC_PROMPTS:
+        prompt += MODEL_SPECIFIC_PROMPTS[model_lower]
+        matched_specific = model_lower
+
     if log:
+        parts = []
         if matched_family:
-            logger.info(f"[LLM] Using {matched_family.upper()}-specific system prompt")
+            parts.append(f"{matched_family.upper()} family")
+        if matched_specific:
+            parts.append(f"{matched_specific} specific")
+        if parts:
+            logger.info(f"[LLM] System prompt: base + {' + '.join(parts)}")
         else:
-            logger.info(f"[LLM] Using base system prompt (no model-specific rules for {model_name})")
+            logger.info(f"[LLM] System prompt: base only (no rules for {model_name})")
 
     return prompt
 
