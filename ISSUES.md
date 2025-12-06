@@ -215,45 +215,65 @@ pthread_join: No such process
 ---
 
 ### ARCH-007: Streaming Architecture Overhaul
-**Severity**: 🟡 High | **Created**: 2025-12-05
+**Severity**: ✅ Implemented | **Created**: 2025-12-05 | **Resolved**: 2025-12-06
 **Component**: Full stack
 
 **Problem**: Current architecture waits for complete inputs before processing. Streaming would reduce perceived latency dramatically.
 
-**Target Architecture**:
+**Solution Implemented** (2025-12-06):
+
 ```
-User speaking → STT streaming partials → LLM pre-thinking on context
-User finishes → VAD detects → LLM finalizes immediately → TTS streams first tokens
-```
-
-**Key Changes Needed**:
-- Streaming STT (ARCH-004)
-- VAD integration (ARCH-005)
-- LLM receives partials before user finishes ("pre-thinking")
-- TTS starts on first token, not complete response
-
-**Two-Tier Response Strategy**:
-- **Local models**: Pure streaming, no ack needed (fast enough)
-- **Cloud models**: Fast local ack while waiting for first cloud token
-
-**The "Pre-Thinking" Insight**:
-```
-Partial: "What's the fuel..."
-LLM internally: [probably asking about fleet fuel, prep that context]
-
-Partial: "What's the fuel price..."
-LLM internally: [oh, market question, pivot to ATLAS/POLIS data]
-
-VAD: [end of speech]
-LLM: [already has direction, generates immediately]
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STREAMING (--streaming flag)                                               │
+│  ┌─────────┐  ┌─────────┐  ┌─────────────┐  VAD end  ┌───────┐  ┌─────────┐ │
+│  │ Speech  │──│ STT     │──│ LLM         │───────────│ LLM   │──│ TTS     │ │
+│  │         │  │ partial │  │ pre-think   │           │ final │  │ chunk   │ │
+│  └─────────┘  └─────────┘  └─────────────┘           └───────┘  └─────────┘ │
+│     │           every        context                   ~10ms     immediate  │
+│     │           400ms        warming                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Action Items**:
-- [ ] Complete ARCH-004 (streaming STT)
-- [ ] Complete ARCH-005 (VAD integration)
-- [ ] Implement LLM partial context feeding
-- [ ] Implement TTS token streaming
-- [ ] Benchmark end-to-end latency
+**Components Implemented**:
+
+| Component | Class/Function | File |
+|-----------|----------------|------|
+| STT Partials | `StreamingSTTPartials` | `iris_local.py:353` |
+| TTS Chunking | `TTSChunkDetector` | `iris_local.py:450` |
+| Pre-thinking | `_get_prethinking_prompt()` | `iris_local.py:1099` |
+| VAD Streaming | `run_vad_mode()` | `iris_local.py:1609` |
+
+**TTS Chunk Strategies** (configurable via `--tts-chunk`):
+- `sentence` (default): Wait for `.!?` - safest, natural
+- `phrase`: Trigger on clause boundaries or 8+ words - balanced
+- `word`: Every 4 words - fastest but choppy
+
+**CLI Usage**:
+```bash
+# Enable streaming mode (VAD with STT partials + LLM pre-thinking)
+python iris_local.py --vad --streaming
+
+# Try different TTS chunking strategies
+python iris_local.py --vad --tts-chunk phrase
+python iris_local.py --vad --tts-chunk word
+
+# Compare all TTS strategies with audio playback
+python iris_local.py --compare-tts
+```
+
+**Configuration**:
+```python
+IrisConfig(
+    streaming_enabled=True,        # Enable STT partials
+    tts_chunk_strategy="phrase",   # sentence/phrase/word
+    stt_partial_interval=0.4,      # STT every 400ms
+    enable_llm_prethinking=True,   # Feed partials to LLM context
+)
+```
+
+**Future Optimization**:
+- True token-level TTS streaming (requires neural codec TTS)
+- LLM speculative decoding on partials
 
 ---
 

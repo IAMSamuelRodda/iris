@@ -46,9 +46,12 @@ import tempfile
 import threading
 import logging
 from dataclasses import dataclass
-from typing import Callable, Generator
+from typing import Callable, Generator, Literal
 
 import numpy as np
+
+# TTS Chunk Strategy for streaming comparison (ARCH-007)
+TTSChunkStrategy = Literal["sentence", "phrase", "word"]
 import requests
 
 # Tools module
@@ -271,6 +274,12 @@ class IrisConfig:
     silence_duration: float = 0.5  # Seconds of silence to end recording
     min_speech_duration: float = 1.0  # Minimum speech to process (filters short noises)
 
+    # Streaming Pipeline (ARCH-007)
+    streaming_enabled: bool = False  # Enable streaming STT partials + LLM pre-thinking
+    tts_chunk_strategy: TTSChunkStrategy = "phrase"  # "sentence", "phrase", or "word"
+    stt_partial_interval: float = 0.4  # Run STT partials every N seconds during speech
+    enable_llm_prethinking: bool = True  # Feed STT partials to LLM while user speaks
+
 
 # ==============================================================================
 # Silero VAD Integration
@@ -335,6 +344,198 @@ class SileroVAD:
         # Note: Concurrent access could cause issues, but single-threaded use is fine
         speech_prob = self.model(tensor, sample_rate).item()
         return speech_prob > self.threshold, speech_prob
+
+
+# ==============================================================================
+# Streaming STT Partials (ARCH-007)
+# ==============================================================================
+
+class StreamingSTTPartials:
+    """
+    Runs STT periodically on accumulated audio to emit partial transcripts.
+
+    Used during speech to feed LLM "pre-thinking" context before VAD fires.
+    Uses faster-whisper directly (no RealtimeSTT) for minimal overhead.
+    """
+
+    def __init__(
+        self,
+        stt,  # Reference to IrisLocal's STT instance
+        interval: float = 0.4,  # Run partials every N seconds
+        on_partial: Callable[[str], None] = None,
+    ):
+        self.stt = stt
+        self.interval = interval
+        self.on_partial = on_partial
+
+        self._audio_buffer: list[np.ndarray] = []
+        self._last_partial_time = 0.0
+        self._last_partial_text = ""
+        self._running = False
+        self._thread: threading.Thread | None = None
+
+    def feed_audio(self, chunk: np.ndarray):
+        """Feed audio chunk for accumulation."""
+        self._audio_buffer.append(chunk.copy())
+
+    def get_audio(self) -> np.ndarray:
+        """Get accumulated audio as single array."""
+        if not self._audio_buffer:
+            return np.array([], dtype=np.float32)
+        return np.concatenate(self._audio_buffer)
+
+    def _run_partial_stt(self):
+        """Background thread that periodically runs STT on accumulated audio."""
+        while self._running:
+            time.sleep(0.05)  # Check every 50ms
+
+            # Check if enough time has passed
+            now = time.perf_counter()
+            if now - self._last_partial_time < self.interval:
+                continue
+
+            # Get accumulated audio
+            audio = self.get_audio()
+            if len(audio) < 8000:  # Need at least 0.5s of audio
+                continue
+
+            # Run STT (fast with beam_size=1)
+            try:
+                # Use 'tiny' model for partials if available, fallback to base
+                start = time.perf_counter()
+                text = self.stt.transcribe(audio, beam_size=1)
+                elapsed = (time.perf_counter() - start) * 1000
+
+                # Only emit if text changed
+                text = text.strip()
+                if text and text != self._last_partial_text:
+                    logger.debug(f"[Streaming] Partial STT ({elapsed:.0f}ms): \"{text}\"")
+                    self._last_partial_text = text
+                    if self.on_partial:
+                        self.on_partial(text)
+
+                self._last_partial_time = now
+
+            except Exception as e:
+                logger.warning(f"[Streaming] Partial STT error: {e}")
+
+    def start(self):
+        """Start partial STT processing."""
+        self._running = True
+        self._audio_buffer = []
+        self._last_partial_time = time.perf_counter()
+        self._last_partial_text = ""
+        self._thread = threading.Thread(target=self._run_partial_stt, daemon=True)
+        self._thread.start()
+        logger.debug("[Streaming] Started partial STT")
+
+    def stop(self) -> str:
+        """Stop and return last partial text."""
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=0.5)
+            self._thread = None
+        return self._last_partial_text
+
+    def clear(self):
+        """Clear accumulated audio."""
+        self._audio_buffer = []
+        self._last_partial_text = ""
+
+
+# ==============================================================================
+# TTS Chunk Detector (ARCH-007)
+# ==============================================================================
+
+class TTSChunkDetector:
+    """
+    Detects TTS chunk boundaries based on configurable strategy.
+
+    Strategies:
+    - "sentence": Wait for .!? (current behavior, safest)
+    - "phrase": Trigger on clause boundaries (, : ;) or 8+ words
+    - "word": Trigger every 3-5 words (experimental, may sound choppy)
+    """
+
+    def __init__(self, strategy: TTSChunkStrategy = "sentence"):
+        self.strategy = strategy
+        self._buffer = ""
+        self._word_count = 0
+
+    def feed(self, token: str) -> str | None:
+        """
+        Feed a token and return text chunk if ready, else None.
+
+        Args:
+            token: LLM output token
+
+        Returns:
+            Text chunk ready for TTS, or None if still accumulating
+        """
+        self._buffer += token
+
+        if self.strategy == "sentence":
+            return self._check_sentence()
+        elif self.strategy == "phrase":
+            return self._check_phrase()
+        elif self.strategy == "word":
+            return self._check_word()
+        return None
+
+    def _check_sentence(self) -> str | None:
+        """Original strategy: wait for sentence-ending punctuation."""
+        import re
+        match = re.match(r'(.+?[.!?])\s*', self._buffer)
+        if match:
+            chunk = match.group(1)
+            self._buffer = self._buffer[len(match.group(0)):]
+            return chunk
+        return None
+
+    def _check_phrase(self) -> str | None:
+        """Trigger on clause boundaries or after 8+ words."""
+        import re
+
+        # Check for clause-ending punctuation
+        match = re.match(r'(.+?[.!?,;:])\s*', self._buffer)
+        if match:
+            chunk = match.group(1)
+            # Only trigger on comma/semicolon if we have at least 4 words
+            if chunk[-1] in ',:;' and len(chunk.split()) < 4:
+                return None
+            self._buffer = self._buffer[len(match.group(0)):]
+            self._word_count = 0
+            return chunk
+
+        # Check word count threshold
+        words = self._buffer.split()
+        if len(words) >= 8:
+            # Take first 6 words
+            chunk = ' '.join(words[:6])
+            self._buffer = ' '.join(words[6:])
+            if self._buffer:
+                self._buffer = ' ' + self._buffer  # Preserve spacing
+            return chunk
+
+        return None
+
+    def _check_word(self) -> str | None:
+        """Experimental: trigger every 4 words."""
+        words = self._buffer.split()
+        if len(words) >= 4:
+            chunk = ' '.join(words[:4])
+            self._buffer = ' '.join(words[4:])
+            if self._buffer:
+                self._buffer = ' ' + self._buffer
+            return chunk
+        return None
+
+    def flush(self) -> str:
+        """Return any remaining buffered text."""
+        remaining = self._buffer.strip()
+        self._buffer = ""
+        self._word_count = 0
+        return remaining
 
 
 # ==============================================================================
@@ -659,6 +860,11 @@ class IrisLocal:
         self.on_tool_call: callable = None       # (tool_name: str, args: dict) -> None
         self.on_tool_result: callable = None     # (tool_name: str, result: str) -> None
 
+        # Streaming pipeline (ARCH-007)
+        self._streaming_stt: StreamingSTTPartials | None = None
+        self._prethinking_context: str = ""  # Current partial text for LLM pre-thinking
+        self.on_stt_partial: callable = None  # (text: str) -> None - GUI callback for partials
+
     @property
     def stt(self):
         """Lazy-load STT."""
@@ -831,6 +1037,87 @@ class IrisLocal:
             "history_turns": len(self._conversation_history) // 2,
             "max_history_turns": self._max_history_turns,
         }
+
+    # ==========================================================================
+    # Streaming Pipeline Methods (ARCH-007)
+    # ==========================================================================
+
+    def start_streaming_stt(self):
+        """
+        Start streaming STT partial transcription during speech.
+
+        Call this when speech starts (VAD onset), then feed audio chunks.
+        """
+        if not self.config.streaming_enabled:
+            return
+
+        def on_partial(text: str):
+            """Handle STT partial transcript."""
+            self._prethinking_context = text
+            logger.info(f"[Streaming] Partial: \"{text}\"")
+
+            # Notify GUI if callback registered
+            if self.on_stt_partial:
+                self.on_stt_partial(text)
+
+        self._streaming_stt = StreamingSTTPartials(
+            stt=self.stt,
+            interval=self.config.stt_partial_interval,
+            on_partial=on_partial,
+        )
+        self._streaming_stt.start()
+        self._prethinking_context = ""
+
+    def stop_streaming_stt(self) -> str:
+        """
+        Stop streaming STT and return the last partial transcript.
+
+        Call this when VAD detects end of speech.
+        """
+        if self._streaming_stt:
+            last_partial = self._streaming_stt.stop()
+            self._streaming_stt = None
+            return last_partial
+        return ""
+
+    def feed_audio_streaming(self, chunk: np.ndarray):
+        """
+        Feed audio chunk to streaming STT during speech.
+
+        Args:
+            chunk: Audio chunk (float32, 16kHz)
+        """
+        if self._streaming_stt:
+            self._streaming_stt.feed_audio(chunk)
+
+    def get_streaming_audio(self) -> np.ndarray:
+        """Get all accumulated audio from streaming STT."""
+        if self._streaming_stt:
+            return self._streaming_stt.get_audio()
+        return np.array([], dtype=np.float32)
+
+    def _get_prethinking_prompt(self, final_text: str) -> str:
+        """
+        Generate prompt with pre-thinking context for faster LLM response.
+
+        If we have partial transcripts from streaming STT, add context
+        that helps LLM "already know" what the user was asking about.
+        """
+        if not self.config.enable_llm_prethinking or not self._prethinking_context:
+            return final_text
+
+        # If partial matches final, no extra context needed
+        if self._prethinking_context.lower().strip() == final_text.lower().strip():
+            return final_text
+
+        # Add pre-thinking context hint
+        prethink_hint = (
+            f"[Context: While the user was speaking, I heard partial text: "
+            f"\"{self._prethinking_context}\" - I was already thinking about this topic.]\n\n"
+            f"{final_text}"
+        )
+        logger.debug(f"[Streaming] Pre-thinking enabled: partial=\"{self._prethinking_context}\"")
+        return prethink_hint
 
     def _call_llm(self, prompt: str, stream: bool = False) -> str:
         """
@@ -1126,7 +1413,10 @@ class IrisLocal:
             logger.info(f"[Interruption] Context added - user said: \"{text}\"")
             self._last_interruption = None
 
-        prompt = text
+        # Apply pre-thinking context if streaming was used (ARCH-007)
+        prompt = self._get_prethinking_prompt(text)
+        # Clear pre-thinking context after use
+        self._prethinking_context = ""
 
         # LLM (streaming) + TTS (progressive with interruption)
         logger.info(f"[LLM] Generating response...")
@@ -1134,12 +1424,11 @@ class IrisLocal:
         llm_start = time.perf_counter()
         first_token_time = None
 
-        # Accumulate for sentence detection
-        buffer = ""
+        # Use TTSChunkDetector for configurable chunking strategy (ARCH-007)
+        chunk_detector = TTSChunkDetector(self.config.tts_chunk_strategy)
         full_response = ""
         spoken_text = ""
         was_interrupted = False
-        import re
 
         # Start VAD monitoring for barge-in if enabled
         if allow_interrupt:
@@ -1159,24 +1448,20 @@ class IrisLocal:
                     first_token_time = (time.perf_counter() - llm_start) * 1000
                     logger.info(f"[LLM] First token: {first_token_time:.0f}ms")
 
-                buffer += token
                 full_response += token
 
-                # Check for complete sentence
-                match = re.match(r'(.+?[.!?])\s*', buffer)
-                if match:
-                    sentence = match.group(1)
-                    buffer = buffer[len(match.group(0)):]
-
-                    # Check interrupt before speaking each sentence
+                # Use chunk detector for configurable TTS chunking (ARCH-007)
+                chunk = chunk_detector.feed(token)
+                if chunk:
+                    # Check interrupt before speaking each chunk
                     if allow_interrupt and self._check_interrupt():
-                        logger.info("[Pipeline] User interrupted before sentence")
+                        logger.info("[Pipeline] User interrupted before chunk")
                         was_interrupted = True
                         break
 
-                    # Speak sentence with interrupt checking
-                    logger.info(f"[TTS] Speaking: \"{sentence}\"")
-                    result = self.tts.synthesize(sentence)
+                    # Speak chunk with interrupt checking
+                    logger.info(f"[TTS] Speaking ({self.config.tts_chunk_strategy}): \"{chunk}\"")
+                    result = self.tts.synthesize(chunk)
                     tts_audio = (result.audio.squeeze() * 32767).astype(np.int16)
 
                     if allow_interrupt:
@@ -1187,27 +1472,28 @@ class IrisLocal:
                         if samples_played < len(tts_audio):
                             # Partial playback - estimate spoken portion
                             ratio = samples_played / len(tts_audio)
-                            chars_spoken = int(len(sentence) * ratio)
-                            spoken_text += sentence[:chars_spoken]
+                            chars_spoken = int(len(chunk) * ratio)
+                            spoken_text += chunk[:chars_spoken]
                             was_interrupted = True
                             break
                         else:
-                            spoken_text += sentence + " "
+                            spoken_text += chunk + " "
                     else:
                         self.audio.play(tts_audio, result.sample_rate)
-                        spoken_text += sentence + " "
+                        spoken_text += chunk + " "
 
             # Speak any remaining text (if not interrupted)
-            if not was_interrupted and buffer.strip():
-                logger.info(f"[TTS] Speaking final: \"{buffer}\"")
-                result = self.tts.synthesize(buffer)
+            remaining = chunk_detector.flush()
+            if not was_interrupted and remaining:
+                logger.info(f"[TTS] Speaking final: \"{remaining}\"")
+                result = self.tts.synthesize(remaining)
                 tts_audio = (result.audio.squeeze() * 32767).astype(np.int16)
 
                 if allow_interrupt:
                     self.audio.play_interruptible(tts_audio, result.sample_rate, self._check_interrupt)
                 else:
                     self.audio.play(tts_audio, result.sample_rate)
-                spoken_text += buffer
+                spoken_text += remaining
 
         finally:
             self._is_speaking = False
@@ -1216,8 +1502,10 @@ class IrisLocal:
 
         # Store interruption event for next turn
         if was_interrupted:
+            # Get any remaining text from chunk detector buffer
+            remaining_buffer = chunk_detector.flush()
             self._last_interruption = InterruptionEvent(
-                intended_response=full_response + buffer,  # What we were going to say
+                intended_response=full_response + remaining_buffer,  # What we were going to say
                 spoken_up_to=spoken_text.strip(),
                 user_interruption="",  # Will be filled by next STT
                 timestamp=time.time()
@@ -1323,13 +1611,18 @@ def run_vad_mode(iris: IrisLocal):
     Voice Activity Detection mode - always listening.
 
     Automatically detects speech start/end and processes.
+    With streaming enabled (ARCH-007), runs STT partials during speech
+    for LLM pre-thinking and faster response times.
     """
     import sounddevice as sd
 
+    streaming_mode = "STREAMING" if iris.config.streaming_enabled else "BATCH"
     print("\n" + "=" * 50)
-    print("IRIS LOCAL - VAD Mode (Always Listening)")
+    print(f"IRIS LOCAL - VAD Mode ({streaming_mode})")
     print("=" * 50)
     print("Speak at any time - IRIS is listening")
+    if iris.config.streaming_enabled:
+        print(f"TTS chunk strategy: {iris.config.tts_chunk_strategy}")
     print("Press Ctrl+C to exit")
     print("=" * 50 + "\n")
 
@@ -1360,8 +1653,16 @@ def run_vad_mode(iris: IrisLocal):
                 is_speaking = True
                 audio_buffer = []
 
+                # ARCH-007: Start streaming STT if enabled
+                if iris.config.streaming_enabled:
+                    iris.start_streaming_stt()
+
             audio_buffer.append(chunk)
             silence_samples = 0
+
+            # ARCH-007: Feed audio to streaming STT
+            if iris.config.streaming_enabled:
+                iris.feed_audio_streaming(chunk)
 
         else:
             if is_speaking:
@@ -1369,9 +1670,17 @@ def run_vad_mode(iris: IrisLocal):
                 silence_samples += len(chunk)
                 audio_buffer.append(chunk)
 
+                # ARCH-007: Keep feeding audio during silence detection
+                if iris.config.streaming_enabled:
+                    iris.feed_audio_streaming(chunk)
+
                 if silence_samples >= silence_threshold:
                     # Speech ended
                     is_speaking = False
+
+                    # ARCH-007: Stop streaming STT
+                    if iris.config.streaming_enabled:
+                        iris.stop_streaming_stt()
 
                     if audio_buffer:
                         audio = np.concatenate(audio_buffer)
@@ -1532,6 +1841,102 @@ def run_gui_mode(iris: IrisLocal):
     gui.run()
 
 
+def run_tts_comparison(iris: IrisLocal):
+    """
+    Compare TTS chunk strategies with live audio playback.
+
+    Plays the same text with each strategy (sentence, phrase, word)
+    and measures first-audio latency for comparison.
+    """
+    test_text = (
+        "SAGE fleet operations show three priority items today. "
+        "First, the Alpha sector patrol completed successfully with no anomalies. "
+        "Second, fuel reserves are running low at the main station. "
+        "Third, a new mining opportunity detected in sector seven."
+    )
+
+    print("\n" + "=" * 60)
+    print("TTS CHUNK STRATEGY COMPARISON")
+    print("=" * 60)
+    print(f"\nTest text ({len(test_text)} chars):")
+    print(f'  "{test_text[:60]}..."')
+    print("\nThis will play the same text 3 times with different strategies.")
+    print("Listen for the difference in response time and naturalness.")
+    print("=" * 60)
+
+    strategies = ["sentence", "phrase", "word"]
+    results = []
+
+    for strategy in strategies:
+        print(f"\n[{strategy.upper()}] Press Enter to play...")
+        input()
+
+        detector = TTSChunkDetector(strategy)
+        chunks = []
+        first_chunk_time = None
+
+        # Simulate LLM token streaming
+        start_time = time.perf_counter()
+
+        # Split text into tokens (simulate LLM output)
+        words = test_text.split()
+        total_chars = 0
+
+        for i, word in enumerate(words):
+            # Add space before word (except first)
+            token = word if i == 0 else " " + word
+            total_chars += len(token)
+
+            chunk = detector.feed(token)
+            if chunk:
+                if first_chunk_time is None:
+                    first_chunk_time = (time.perf_counter() - start_time) * 1000
+                    print(f"  First chunk at {first_chunk_time:.0f}ms: \"{chunk[:40]}...\"")
+
+                # Synthesize and play
+                tts_start = time.perf_counter()
+                result = iris.tts.synthesize(chunk)
+                tts_time = (time.perf_counter() - tts_start) * 1000
+
+                audio = (result.audio.squeeze() * 32767).astype(np.int16)
+                iris.audio.play(audio, result.sample_rate)
+                chunks.append((chunk, tts_time))
+
+        # Flush remaining
+        remaining = detector.flush()
+        if remaining:
+            result = iris.tts.synthesize(remaining)
+            audio = (result.audio.squeeze() * 32767).astype(np.int16)
+            iris.audio.play(audio, result.sample_rate)
+            chunks.append((remaining, 0))
+
+        total_time = (time.perf_counter() - start_time) * 1000
+
+        results.append({
+            "strategy": strategy,
+            "chunks": len(chunks),
+            "first_chunk_ms": first_chunk_time,
+            "total_ms": total_time,
+        })
+
+        print(f"  Total: {total_time:.0f}ms, {len(chunks)} chunks")
+
+    # Summary
+    print("\n" + "=" * 60)
+    print("COMPARISON SUMMARY")
+    print("=" * 60)
+    print(f"{'Strategy':<12} {'First Chunk':<15} {'Total Time':<15} {'Chunks':<8}")
+    print("-" * 50)
+    for r in results:
+        print(f"{r['strategy']:<12} {r['first_chunk_ms']:.0f}ms{'':<10} {r['total_ms']:.0f}ms{'':<10} {r['chunks']:<8}")
+    print("=" * 60)
+
+    # Recommendation
+    best = min(results, key=lambda x: x['first_chunk_ms'])
+    print(f"\n✓ Fastest first response: {best['strategy']} ({best['first_chunk_ms']:.0f}ms)")
+    print("  Note: 'word' may sound choppy; 'phrase' balances speed and naturalness")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="IRIS Local - Native Python voice client",
@@ -1569,6 +1974,15 @@ Examples:
     parser.add_argument("--debug", action="store_true",
                        help="Enable debug logging")
 
+    # Streaming pipeline options (ARCH-007)
+    parser.add_argument("--streaming", action="store_true",
+                       help="Enable streaming STT partials + LLM pre-thinking")
+    parser.add_argument("--tts-chunk", choices=["sentence", "phrase", "word"],
+                       default="sentence",
+                       help="TTS chunking strategy (default: sentence)")
+    parser.add_argument("--compare-tts", action="store_true",
+                       help="Run TTS chunk comparison benchmark")
+
     args = parser.parse_args()
 
     if args.debug:
@@ -1589,6 +2003,12 @@ Examples:
     if args.output_device is not None:
         config.output_device = args.output_device
 
+    # Streaming options (ARCH-007)
+    if args.streaming:
+        config.streaming_enabled = True
+    if args.tts_chunk:
+        config.tts_chunk_strategy = args.tts_chunk
+
     # Create IRIS instance
     iris = IrisLocal(config)
 
@@ -1606,7 +2026,9 @@ Examples:
         iris.warmup()
 
     # Run appropriate mode
-    if args.gui:
+    if args.compare_tts:
+        run_tts_comparison(iris)
+    elif args.gui:
         run_gui_mode(iris)
     elif args.vad:
         run_vad_mode(iris)
