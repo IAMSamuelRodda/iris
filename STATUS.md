@@ -3,7 +3,7 @@
 > **Purpose**: Current work, active bugs, and recent changes (2-week rolling window)
 > **Lifecycle**: Living (update daily/weekly during active development)
 
-**Last Updated**: 2025-12-06 (Tool integration complete - rate limiter, quota tracking, voice testing)
+**Last Updated**: 2025-12-06 (9 native tools complete - session todo, utilities, Todoist integration)
 **Current Phase**: Implementation (Native client development)
 **Version**: 0.1.0 (Pre-MVP)
 **Focus**: Native Primary, Web Secondary
@@ -23,6 +23,7 @@
 | **Agent Core** | **Done** | Epic 3 complete (Claude Agent SDK, IrisAgent class) |
 | **Voice Service** | **Done** | Epic 4 complete (faster-whisper STT, Kokoro TTS) |
 | **Web App** | **Done** | Epic 5 complete (React + Vite, chat UI, voice PTT) |
+| **Tool System** | **Done** | 9 native tools (session todo, utilities, Todoist) |
 | CI/CD Pipeline | N/A | Main-only workflow; deploy via docker-compose |
 | Test Coverage | Partial | 12 tests for memory service |
 | Known Bugs | None | Early implementation |
@@ -123,11 +124,17 @@
   - ✅ Fixed: Audio overlap (ack + response now play sequentially)
 
 **In Progress:**
-- 🟡 **Local Tool Integration** (2025-12-05):
-  - Goal: Give IRIS ability to use tools without waiting for CITADEL API
-  - Tools planned: time/date, calculator, web search, timers/reminders
-  - Implementation: Ollama function calling for compatible models
-  - Status: Planning complete, implementation starting
+- ✅ **Local Tool Integration** (2025-12-06) **COMPLETE**:
+  - **Native Ollama Tools** (9 tools, 0ms overhead):
+    - Session: `todo_add`, `todo_complete`, `todo_list` (like Claude Code's TodoWrite)
+    - Utility: `get_current_time`, `calculate`, `web_search` (Brave API)
+    - Todoist: `todoist_create_task`, `todoist_list_tasks`, `todoist_complete_task`
+  - **Todoist Integration**: Direct REST API (simpler than MCP)
+    - Natural language due dates ("tomorrow", "in 4 hours")
+    - Fuzzy task completion (search by content)
+    - Config: `TODOIST_API_KEY` in `~/.config/iris/secrets.env`
+  - **Files**: `src/tools.py` (all tools in one place)
+  - **MCP Bridge**: `src/mcp_bridge.py` available for future MCP tools
 
 - ✅ **Voice Latency Architecture Overhaul** (2025-12-03 - ARCH-003) **COMPLETE**:
   - ✅ Phase 1.1: WebSocket endpoint added to Python FastAPI (`/ws/voice`)
@@ -236,13 +243,25 @@ None
 - Model pre-warmed on server startup (see warmup_tts() in main.py)
 - 11 curated voices available (default: af_heart)
 
-**Acknowledgment Timing** (Low priority)
-- Acknowledgments may feel "too fast" - slightly robotic
-- Future: Add small delay or use TTS prosody for natural pacing
-
 ---
 
 ## Recent Achievements (Last 2 Weeks)
+
+**Tool System Complete (2025-12-06)**
+- **Session Todo Tools** (like Claude Code's TodoWrite):
+  - IRIS can track multi-step tasks during conversation
+  - `todo_add`, `todo_complete`, `todo_list` native tools
+  - Session-scoped: cleared on restart, used for complex requests
+  - Example: "Check fleet, find route, remind me to refuel" → 3 tracked tasks
+- **MCP Bridge for External Tools**:
+  - `src/mcp_bridge.py`: Connects to lazy-mcp proxy
+  - Todoist integration: `mcp_create_reminder`, `mcp_list_reminders`, `mcp_complete_reminder`
+  - Graceful degradation: MCP tools only appear when lazy-mcp is running
+  - ~800 token overhead (95% less than direct MCP)
+- **Unified Tool Access**:
+  - `get_all_tools()`: Returns native + MCP tools for Ollama
+  - `execute_tool()`: Routes to native or MCP based on `mcp_*` prefix
+  - Rate limiter and quota tracking for web search (Brave API)
 
 **Future Architecture Planning (2025-12-05)**
 - **Subagent Delegation** (ARCH-008, Epic 9):

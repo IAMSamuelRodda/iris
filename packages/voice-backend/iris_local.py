@@ -52,7 +52,7 @@ import numpy as np
 import requests
 
 # Tools module
-from src.tools import TOOLS, execute_tool, supports_tools
+from src.tools import TOOLS, execute_tool, supports_tools, get_session_todos
 
 # Setup cuDNN before other imports
 def _setup_cudnn():
@@ -93,11 +93,25 @@ CRITICAL RULES:
 - Speak naturally as if in conversation
 
 TOOLS AVAILABLE:
-- get_current_time: Get the current time and date (use for "what time is it", "what day is it")
-- calculate: Do math calculations (use for any arithmetic, percentages, etc.)
-- web_search: Search the web for current information (use for news, recent events, facts you're unsure about)
+Session Tasks (for tracking multi-step work):
+- todo_add: Add a task to track during this session
+- todo_complete: Mark a session task as complete
+- todo_list: Show current session tasks
 
-Use tools when the user asks about time/date, needs calculations, or wants current information from the web. After getting tool results, give a natural spoken response.
+Utilities:
+- get_current_time: Get the current time and date
+- calculate: Do math calculations
+- web_search: Search the web for current information
+
+Reminders (Todoist - persists after conversation):
+- todoist_create_task: Create a reminder ("remind me to check fuel tomorrow")
+- todoist_list_tasks: Show the user's task list ("what do I need to do?")
+- todoist_complete_task: Mark a task done ("done with X", "finished X")
+
+WHEN TO USE TOOLS:
+- Use todo_* when user gives multiple tasks to track YOUR progress
+- Use todoist_* for persistent reminders the user wants to remember
+- Use utilities for time, math, or web searches
 
 You're a helpful companion who chats about Star Atlas, space gaming, and general topics.
 You DON'T have access to: fleet data, wallet balances, real-time prices, or game APIs.

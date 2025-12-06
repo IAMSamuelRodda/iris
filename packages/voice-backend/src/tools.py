@@ -2,14 +2,23 @@
 IRIS Native Tools - Ollama tool calling integration.
 
 Tools are defined as JSON schemas and executed locally.
+MCP tools (external services) are accessed via lazy-mcp bridge.
+
 Pattern from: specs/RESEARCH-tool-integration-architecture.md
 
 Usage:
-    from src.tools import TOOLS, execute_tool
+    from src.tools import get_all_tools, execute_tool
 
-    # Pass TOOLS to Ollama /api/chat
+    # Get all available tools (native + MCP if available)
+    tools = get_all_tools()
+
+    # Pass tools to Ollama /api/chat
     # If response has tool_calls, execute them:
     result = execute_tool(tool_name, arguments)
+
+Tool Types:
+    - Native: todo_*, get_current_time, calculate, web_search
+    - MCP: mcp_* (via lazy-mcp proxy to external services)
 """
 
 import json
@@ -50,6 +59,13 @@ def _load_secrets() -> dict[str, str]:
 # Load secrets from config file, fall back to environment variables
 _secrets = _load_secrets()
 BRAVE_API_KEY = _secrets.get("BRAVE_API_KEY") or os.environ.get("BRAVE_API_KEY", "")
+TODOIST_API_TOKEN = (
+    _secrets.get("TODOIST_API_TOKEN") or
+    _secrets.get("TODOIST_API_KEY") or
+    os.environ.get("TODOIST_API_TOKEN") or
+    os.environ.get("TODOIST_API_KEY") or
+    ""
+)
 
 
 # ==============================================================================
@@ -211,10 +227,126 @@ def get_quota_status() -> dict:
 
 
 # ==============================================================================
+# Session Todo List (Internal Task Tracking)
+# ==============================================================================
+
+# Session-scoped todo list - cleared on restart, used for multi-step tasks
+_session_todos: list[dict] = []
+
+
+def _todo_add(task: str, priority: str = "normal") -> str:
+    """Add a task to the session todo list."""
+    todo = {
+        "id": len(_session_todos) + 1,
+        "task": task,
+        "status": "pending",
+        "priority": priority,
+        "created": time.time(),
+    }
+    _session_todos.append(todo)
+    logger.info(f"[Todo] Added: {task}")
+    return f"Added task #{todo['id']}: {task}"
+
+
+def _todo_complete(task_id: int) -> str:
+    """Mark a task as complete."""
+    for todo in _session_todos:
+        if todo["id"] == task_id:
+            todo["status"] = "completed"
+            logger.info(f"[Todo] Completed: {todo['task']}")
+            return f"Completed task #{task_id}: {todo['task']}"
+    return f"Task #{task_id} not found"
+
+
+def _todo_list() -> str:
+    """List all tasks in the session."""
+    if not _session_todos:
+        return "No tasks in the current session."
+
+    lines = ["Current tasks:"]
+    for todo in _session_todos:
+        status = "✓" if todo["status"] == "completed" else "○"
+        priority_marker = "!" if todo["priority"] == "high" else ""
+        lines.append(f"  {status} #{todo['id']}{priority_marker}: {todo['task']}")
+
+    pending = sum(1 for t in _session_todos if t["status"] == "pending")
+    completed = sum(1 for t in _session_todos if t["status"] == "completed")
+    lines.append(f"\n{pending} pending, {completed} completed")
+
+    return "\n".join(lines)
+
+
+def _todo_clear() -> str:
+    """Clear all tasks from the session."""
+    count = len(_session_todos)
+    _session_todos.clear()
+    logger.info(f"[Todo] Cleared {count} tasks")
+    return f"Cleared {count} tasks from session."
+
+
+def get_session_todos() -> list[dict]:
+    """Get raw todo list (for UI display)."""
+    return _session_todos.copy()
+
+
+# ==============================================================================
 # Tool Definitions (JSON Schema for Ollama)
 # ==============================================================================
 
 TOOLS = [
+    # --- Session Todo Tools ---
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_add",
+            "description": "Add a task to track during this session. Use when user gives you multiple things to do, or when breaking down a complex request.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "The task to add (e.g., 'Check fleet status', 'Find mining route')",
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["normal", "high"],
+                        "description": "Task priority (default: normal)",
+                    }
+                },
+                "required": ["task"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_complete",
+            "description": "Mark a session task as complete. Use after finishing a tracked task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "integer",
+                        "description": "The task ID to mark complete",
+                    }
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_list",
+            "description": "List all tasks in the current session. Use to show progress or recall what needs to be done.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    # --- Utility Tools ---
     {
         "type": "function",
         "function": {
@@ -267,6 +399,66 @@ TOOLS = [
                     }
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    # --- Todoist Tools (Reminders) ---
+    {
+        "type": "function",
+        "function": {
+            "name": "todoist_create_task",
+            "description": "Create a reminder/task for the user. Use when they say 'remind me to...', 'add a task...', or want to remember something for later.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The task/reminder text (e.g., 'Check fleet fuel levels')",
+                    },
+                    "due_string": {
+                        "type": "string",
+                        "description": "When the task is due in natural language (e.g., 'in 4 hours', 'tomorrow at 3pm', 'next Monday')",
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "description": "Priority 1-4 (4=urgent, 1=normal). Default 1.",
+                    }
+                },
+                "required": ["content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todoist_list_tasks",
+            "description": "List the user's pending tasks/reminders. Use when they ask 'what do I need to do?', 'show my tasks', 'what's on my list?'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filter_str": {
+                        "type": "string",
+                        "description": "Optional filter (e.g., 'today', 'overdue', 'p1' for priority 1)",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todoist_complete_task",
+            "description": "Mark a task as complete. Use when user says 'done with...', 'completed...', 'finished...', or 'mark X as done'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_content": {
+                        "type": "string",
+                        "description": "Part of the task name to search for and complete",
+                    }
+                },
+                "required": ["task_content"],
             },
         },
     },
@@ -437,28 +629,211 @@ def _web_search(query: str, count: int = 3) -> str:
 
 
 # ==============================================================================
+# Todoist API (Direct REST)
+# ==============================================================================
+
+TODOIST_API_URL = "https://api.todoist.com/rest/v2"
+
+
+def _todoist_create_task(content: str, due_string: str = None, priority: int = 1) -> str:
+    """Create a task in Todoist."""
+    if not TODOIST_API_TOKEN:
+        return "Todoist not configured. Add TODOIST_API_TOKEN to ~/.config/iris/secrets.env"
+
+    try:
+        payload = {"content": content}
+        if due_string:
+            payload["due_string"] = due_string
+        if priority and priority > 1:
+            payload["priority"] = priority
+
+        response = requests.post(
+            f"{TODOIST_API_URL}/tasks",
+            headers={"Authorization": f"Bearer {TODOIST_API_TOKEN}"},
+            json=payload,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            task = response.json()
+            due_info = ""
+            if task.get("due"):
+                due_info = f" (due: {task['due'].get('string', task['due'].get('date', ''))})"
+            return f"Created task: {task['content']}{due_info}"
+        else:
+            logger.error(f"[Tools] Todoist error: {response.status_code} {response.text}")
+            return f"Failed to create task (HTTP {response.status_code})"
+
+    except Exception as e:
+        logger.error(f"[Tools] Todoist error: {e}")
+        return f"Todoist error: {str(e)}"
+
+
+def _todoist_list_tasks(filter_str: str = None) -> str:
+    """List tasks from Todoist."""
+    if not TODOIST_API_TOKEN:
+        return "Todoist not configured. Add TODOIST_API_TOKEN to ~/.config/iris/secrets.env"
+
+    try:
+        params = {}
+        if filter_str:
+            params["filter"] = filter_str
+
+        response = requests.get(
+            f"{TODOIST_API_URL}/tasks",
+            headers={"Authorization": f"Bearer {TODOIST_API_TOKEN}"},
+            params=params,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            tasks = response.json()
+            if not tasks:
+                return "No tasks found."
+
+            lines = [f"You have {len(tasks)} task(s):"]
+            for i, task in enumerate(tasks[:10], 1):  # Limit to 10 for voice
+                due = ""
+                if task.get("due"):
+                    due = f" - due {task['due'].get('string', task['due'].get('date', ''))}"
+                lines.append(f"{i}. {task['content']}{due}")
+
+            if len(tasks) > 10:
+                lines.append(f"...and {len(tasks) - 10} more")
+
+            return "\n".join(lines)
+        else:
+            return f"Failed to get tasks (HTTP {response.status_code})"
+
+    except Exception as e:
+        logger.error(f"[Tools] Todoist error: {e}")
+        return f"Todoist error: {str(e)}"
+
+
+def _todoist_complete_task(task_id: str = None, task_content: str = None) -> str:
+    """Complete a task in Todoist by ID or by searching content."""
+    if not TODOIST_API_TOKEN:
+        return "Todoist not configured. Add TODOIST_API_TOKEN to ~/.config/iris/secrets.env"
+
+    try:
+        # If no ID given, try to find by content
+        if not task_id and task_content:
+            response = requests.get(
+                f"{TODOIST_API_URL}/tasks",
+                headers={"Authorization": f"Bearer {TODOIST_API_TOKEN}"},
+                timeout=10,
+            )
+            if response.status_code == 200:
+                tasks = response.json()
+                for task in tasks:
+                    if task_content.lower() in task["content"].lower():
+                        task_id = task["id"]
+                        break
+
+        if not task_id:
+            return "Could not find task to complete. Please specify the task."
+
+        response = requests.post(
+            f"{TODOIST_API_URL}/tasks/{task_id}/close",
+            headers={"Authorization": f"Bearer {TODOIST_API_TOKEN}"},
+            timeout=10,
+        )
+
+        if response.status_code == 204:
+            return "Task completed!"
+        else:
+            return f"Failed to complete task (HTTP {response.status_code})"
+
+    except Exception as e:
+        logger.error(f"[Tools] Todoist error: {e}")
+        return f"Todoist error: {str(e)}"
+
+
+# ==============================================================================
 # Tool Execution
 # ==============================================================================
 
 # Map tool names to functions
 TOOL_FUNCTIONS = {
+    # Session todo
+    "todo_add": _todo_add,
+    "todo_complete": _todo_complete,
+    "todo_list": _todo_list,
+    # Utility
     "get_current_time": _get_current_time,
     "calculate": _calculate,
     "web_search": _web_search,
+    # Todoist (reminders)
+    "todoist_create_task": _todoist_create_task,
+    "todoist_list_tasks": _todoist_list_tasks,
+    "todoist_complete_task": _todoist_complete_task,
 }
+
+
+def get_tool_names() -> list[str]:
+    """Get list of available tool names."""
+    return list(TOOL_FUNCTIONS.keys())
+
+
+# ==============================================================================
+# Unified Tool Access (Native + MCP)
+# ==============================================================================
+
+def get_all_tools(include_mcp: bool = True) -> list[dict]:
+    """
+    Get all available tools (native + MCP if available).
+
+    Args:
+        include_mcp: If True, include MCP tools when lazy-mcp is running
+
+    Returns:
+        List of tool definitions for Ollama
+    """
+    all_tools = TOOLS.copy()
+
+    if include_mcp:
+        try:
+            from src.mcp_bridge import get_mcp_tools
+            mcp_tools = get_mcp_tools()
+            all_tools.extend(mcp_tools)
+            if mcp_tools:
+                logger.info(f"[Tools] Added {len(mcp_tools)} MCP tools")
+        except ImportError:
+            logger.debug("[Tools] MCP bridge not available")
+        except Exception as e:
+            logger.warning(f"[Tools] Failed to load MCP tools: {e}")
+
+    return all_tools
 
 
 def execute_tool(name: str, arguments: dict[str, Any]) -> str:
     """
     Execute a tool by name with given arguments.
 
+    Handles both native tools and MCP tools (mcp_* prefix).
+
     Args:
-        name: Tool name (must match a key in TOOL_FUNCTIONS)
+        name: Tool name (native or MCP)
         arguments: Dict of arguments to pass to the tool
 
     Returns:
         Tool result as a string
     """
+    # Check if this is an MCP tool
+    if name.startswith("mcp_"):
+        try:
+            from src.mcp_bridge import execute_mcp_tool
+            logger.info(f"[Tools] Executing MCP tool: {name}({arguments})")
+            result = execute_mcp_tool(name, arguments)
+            logger.info(f"[Tools] MCP result: {result[:100]}...")
+            return result
+        except ImportError:
+            return "MCP tools not available (mcp_bridge module not found)"
+        except Exception as e:
+            logger.error(f"[Tools] MCP error: {e}")
+            return f"MCP tool failed: {str(e)}"
+
+    # Native tool execution
     if name not in TOOL_FUNCTIONS:
         logger.warning(f"[Tools] Unknown tool: {name}")
         return f"Error: Unknown tool '{name}'"
@@ -471,11 +846,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> str:
     except Exception as e:
         logger.error(f"[Tools] Error executing {name}: {e}")
         return f"Error executing {name}: {str(e)}"
-
-
-def get_tool_names() -> list[str]:
-    """Get list of available tool names."""
-    return list(TOOL_FUNCTIONS.keys())
 
 
 # ==============================================================================
@@ -521,6 +891,14 @@ if __name__ == "__main__":
         print(f"  Total time: {_time.time()-start:.2f}s (expected ~2s for 3 requests)")
     else:
         print(f"  Skipped (no API key)")
+
+    print(f"\nSession todo test:")
+    print(f"  {execute_tool('todo_add', {'task': 'Check fleet status'})}")
+    print(f"  {execute_tool('todo_add', {'task': 'Find mining route', 'priority': 'high'})}")
+    print(f"  {execute_tool('todo_list', {})}")
+    print(f"  {execute_tool('todo_complete', {'task_id': 1})}")
+    print(f"  {execute_tool('todo_list', {})}")
+    _session_todos.clear()  # Clean up
 
     print(f"\nTool-capable models check:")
     for model in ["qwen2.5:7b", "llama3.1:8b", "mistral:7b", "phi3:mini"]:
