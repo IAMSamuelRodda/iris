@@ -653,6 +653,12 @@ class IrisLocal:
         self._context_max = 8192  # Default, updated from model info
         self._total_tokens_session = 0  # Running total for session
 
+        # GUI activity callbacks (for GUI-002 and GUI-003)
+        # Called when activity happens that should be displayed in transcript
+        self.on_acknowledgment: callable = None  # (text: str) -> None
+        self.on_tool_call: callable = None       # (tool_name: str, args: dict) -> None
+        self.on_tool_result: callable = None     # (tool_name: str, result: str) -> None
+
     @property
     def stt(self):
         """Lazy-load STT."""
@@ -932,6 +938,9 @@ class IrisLocal:
         ack = assistant_message.get("content", "").strip()
         if ack:
             logger.info(f"[UX] LLM tool acknowledgment: \"{ack}\"")
+            # GUI-002: Notify GUI to display acknowledgment
+            if self.on_acknowledgment:
+                self.on_acknowledgment(ack)
             self.speak(ack, stream_sentences=False, interruptible=False)
 
         # Execute each tool and add results
@@ -942,8 +951,18 @@ class IrisLocal:
 
             logger.info(f"[LLM] Tool call: {tool_name}({tool_args})")
 
+            # GUI-003: Notify GUI about tool call
+            if self.on_tool_call:
+                self.on_tool_call(tool_name, tool_args)
+
             # Execute the tool
             tool_result = execute_tool(tool_name, tool_args)
+
+            # GUI-003: Notify GUI about tool result (truncated for display)
+            if self.on_tool_result:
+                # Truncate result for display
+                display_result = tool_result[:100] + "..." if len(tool_result) > 100 else tool_result
+                self.on_tool_result(tool_name, display_result)
 
             # Add tool result to messages
             messages.append({
@@ -1406,7 +1425,33 @@ def run_gui_mode(iris: IrisLocal):
 
     gui = IrisGUI(iris)
 
-    # Wire up callbacks
+    # Wire up activity callbacks (GUI-002 and GUI-003)
+    def on_acknowledgment(text: str):
+        """Display acknowledgment in transcript."""
+        gui.add_activity("acknowledgment", text)
+
+    def on_tool_call(tool_name: str, args: dict):
+        """Display tool call in transcript."""
+        # Format tool call for display
+        if tool_name == "iris":
+            # Meta-tool: show category and action
+            category = args.get("category", "")
+            action = args.get("action", "")
+            gui.add_activity("tool_call", f"Using {category}.{action}...")
+        else:
+            gui.add_activity("tool_call", f"Calling {tool_name}...")
+
+    def on_tool_result(tool_name: str, result: str):
+        """Display tool result in transcript."""
+        # Clean up result for display
+        result_clean = result.replace("\n", " ").strip()
+        gui.add_activity("tool_result", result_clean)
+
+    iris.on_acknowledgment = on_acknowledgment
+    iris.on_tool_call = on_tool_call
+    iris.on_tool_result = on_tool_result
+
+    # Wire up audio callbacks
     audio_buffer = []
     recording_active = False
 

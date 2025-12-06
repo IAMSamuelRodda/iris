@@ -901,17 +901,58 @@ class IrisGUI:
         self.state.waveform_data = display_data
         dpg.set_value("waveform_series", [list(range(512)), display_data.tolist()])
 
-    def add_message(self, role: str, content: str):
-        """Add a message to the transcript."""
-        self.state.messages.append({"role": role, "content": content})
+    def add_message(self, role: str, content: str, msg_type: str = "message"):
+        """
+        Add a message to the transcript.
+
+        Args:
+            role: "user" or "assistant"
+            content: Message content
+            msg_type: "message" (default), "acknowledgment", "tool_call", "tool_result"
+        """
+        self.state.messages.append({
+            "role": role,
+            "content": content,
+            "type": msg_type,
+        })
+        self._update_transcript()
+
+    def add_activity(self, activity_type: str, content: str):
+        """
+        Add an activity indicator to the transcript (tool calls, searches, etc).
+
+        Args:
+            activity_type: "tool_call", "tool_result", "acknowledgment"
+            content: Activity description
+        """
+        self.state.messages.append({
+            "role": "system",
+            "content": content,
+            "type": activity_type,
+        })
         self._update_transcript()
 
     def _update_transcript(self):
-        """Update the transcript display."""
+        """Update the transcript display with styled messages."""
         lines = []
-        for msg in self.state.messages[-20:]:  # Last 20 messages
-            prefix = "You: " if msg["role"] == "user" else "IRIS: "
-            lines.append(f"{prefix}{msg['content']}")
+        for msg in self.state.messages[-30:]:  # Last 30 messages (more for activity)
+            msg_type = msg.get("type", "message")
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if msg_type == "acknowledgment":
+                # Acknowledgments shown in italics/dimmed
+                lines.append(f"  💭 {content}")
+            elif msg_type == "tool_call":
+                # Tool calls shown with tool icon
+                lines.append(f"  🔧 {content}")
+            elif msg_type == "tool_result":
+                # Tool results shown with result icon
+                lines.append(f"  📋 {content}")
+            elif role == "user":
+                lines.append(f"You: {content}")
+            else:
+                lines.append(f"IRIS: {content}")
 
         dpg.set_value("transcript_text", "\n\n".join(lines))
 

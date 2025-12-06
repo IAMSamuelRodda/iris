@@ -528,8 +528,8 @@
 > **Focus**: Native Primary, Web Secondary
 > **Native MVP**: DearPyGui desktop app with local Ollama + faster-whisper + Kokoro
 > **Voice latency**: ~150-250ms local (target <500ms ✅), ~700ms cloud
-> **Recent**: GUI-001 (voice styles), ARCH-005/006 (VAD + interruption), BUG-001 (PTT/VAD toggle)
-> **Next priorities**: ARCH-011 (SearXNG search), GUI-002/003 (activity display), ASP-006 (wake word)
+> **Recent**: ARCH-011 (SearXNG), GUI-002/003 (activity display), GUI-001 (voice styles), BUG-001 (PTT/VAD)
+> **Next priorities**: ASP-006 (wake word), ARCH-012 (setup wizard)
 
 ---
 

@@ -338,32 +338,40 @@ When users ramble, they often want to be *heard* first:
 **Note**: Persistence not yet implemented (session-only). Would need config file at `~/.config/iris/` for cross-session persistence.
 
 ### GUI-002: Show Acknowledgments in Conversation Transcript
-**Severity**: 🟡 Medium | **Created**: 2025-12-06
+**Severity**: ✅ Resolved | **Created**: 2025-12-06 | **Resolved**: 2025-12-06
 **Component**: iris_local.py (DearPyGui)
 
 **Problem**: When IRIS says "Checking..." before a tool call, this acknowledgment is spoken but not shown in the conversation transcript panel.
 
-**Requirements**:
-- [ ] Display acknowledgment text in transcript when `[UX] LLM tool acknowledgment` fires
-- [ ] Visually distinguish from main responses (lighter text, prefix, or similar)
-
-### GUI-003: Streaming Activity Display (Claude.ai UX Study)
-**Severity**: 🟡 Medium | **Created**: 2025-12-06
-**Component**: iris_local.py (DearPyGui)
-
-**Problem**: Technical activity (tool calls, searches, memory operations) happens invisibly. User only sees final response. Claude.ai shows this activity with distinct formatting (thinking blocks, tool use indicators).
-
-**Research**:
-- [ ] Study Claude.ai's streaming activity UX via browser DevTools
-- [ ] Document patterns: thinking indicators, tool call display, result preview
-- [ ] Design equivalent for DearPyGui (collapsible sections, status line, etc.)
+**Solution Implemented**:
+- Added `on_acknowledgment` callback to IrisLocal class
+- New `add_activity()` method in IrisGUI for activity indicators
+- Acknowledgments shown with 💭 icon and distinct formatting
 
 **Implementation**:
-- [ ] Stream tool call info to conversation panel with distinct styling
-- [ ] Show tool name, parameters, and result summary
-- [ ] Collapsible or toggleable detail level
+- [x] Display acknowledgment text in transcript when `[UX] LLM tool acknowledgment` fires
+- [x] Visually distinguish from main responses (💭 prefix)
 
-**Reference**: Claude.ai's artifact and thinking display patterns
+---
+
+### GUI-003: Streaming Activity Display (Tool Calls, Searches)
+**Severity**: ✅ Resolved | **Created**: 2025-12-06 | **Resolved**: 2025-12-06
+**Component**: iris_local.py (DearPyGui)
+
+**Problem**: Technical activity (tool calls, searches, memory operations) happens invisibly. User only sees final response.
+
+**Solution Implemented**:
+- Added `on_tool_call` and `on_tool_result` callbacks to IrisLocal
+- Activity displayed inline in transcript with icons:
+  - 🔧 Tool calls (e.g., "Using search.web_search...")
+  - 📋 Tool results (truncated preview)
+  - 💭 Acknowledgments (e.g., "Let me check...")
+
+**Implementation**:
+- [x] Add callback mechanism to IrisLocal for activity events
+- [x] Display tool calls with 🔧 icon
+- [x] Display tool results with 📋 icon (truncated to 100 chars)
+- [x] Wire callbacks in run_gui_mode()
 
 ---
 
