@@ -75,43 +75,44 @@ Custom streaming wrapper for maximum speed:
 ## High Priority (Riff Session 2025-12-05)
 
 ### ARCH-006: Interruption Context Desync
-**Severity**: 🟡 High | **Created**: 2025-12-05 | **Status**: Design Complete
-**Component**: agent-core
+**Severity**: ✅ Resolved | **Created**: 2025-12-05 | **Resolved**: 2025-12-06
+**Component**: voice-backend (iris_local.py)
 
 **Problem**: When user interrupts IRIS mid-response, context doesn't reflect what was actually spoken vs generated.
 
-**Scenario**:
-```
-IRIS generating: "Three updates. First, Alpha docked. Second, fuel critical. Third, repairs."
-User interrupts after: "Second, fuel crit—"
-Context shows: Full response delivered (WRONG)
-```
+**Solution Implemented**:
 
-**Designed Solution**: Annotate interruptions, don't truncate.
-
-```typescript
-interface InterruptionEvent {
-  intendedResponse: string;      // full generated response
-  spokenUpTo: string;            // parsed from TTS playhead position
-  interruptedAtWord: number;     // word/character position
-  userInterruption: string;      // what they said
-}
+```python
+@dataclass
+class InterruptionEvent:
+    intended_response: str      # Full response IRIS was going to say
+    spoken_up_to: str           # What user actually heard
+    user_interruption: str      # What they said to interrupt
+    timestamp: float
 ```
 
-**Prompt Injection Pattern**:
-> "Note: Your previous response was interrupted by the user after '...fuel crit—'. They only heard up to that point. Your full intended response was: [X]. Their interruption: [Y]"
+**Prompt Injection** (in `process_voice()`):
+```
+[INTERRUPTION: Your previous response was interrupted.
+You intended to say: "Three updates. First, Alpha docked..."
+but user only heard up to: "Second, fuel crit—"
+Their interruption: "wait, what about my cargo?"]
+```
+
+**Implementation Details**:
+1. `InterruptionEvent` stored when TTS is interrupted via barge-in
+2. On next voice input, STT result populates `user_interruption`
+3. Full context injected into conversation history before LLM call
+4. GUI shows interruption panel with intended/spoken/user fields
 
 **Benefits**:
-1. Model retains full knowledge of what it intended to say
-2. Model understands social context (being cut off)
-3. Model can offer to complete: "Fuel's at 15%. I also had an update about repairs - want it?"
-4. Enables natural phrases: "As I was saying...", "To finish that thought..."
+- LLM knows what was intended vs heard
+- Can offer to continue: "As I was saying, the third update..."
+- Understands social context of being cut off
 
-**Action Items**:
-- [ ] Implement TTS playhead tracking
-- [ ] Build InterruptionEvent capture
-- [ ] Add prompt injection for interruption context
-- [ ] Test with VAD-triggered interrupts
+**Files Modified**:
+- `iris_local.py`: `process_voice()` restructured to capture user interruption
+- `iris_gui.py`: Interruption panel displays all three fields
 
 **References**: `specs/DESIGN-adaptive-verbosity.md`
 
@@ -295,18 +296,23 @@ When users ramble, they often want to be *heard* first:
 **References**: `specs/DESIGN-adaptive-verbosity.md`
 
 ### GUI-001: Voice Style Selector in Native Client
-**Severity**: 🟡 Medium | **Created**: 2025-12-06
-**Component**: iris_local.py (DearPyGui)
+**Severity**: ✅ Resolved | **Created**: 2025-12-06 | **Resolved**: 2025-12-06
+**Component**: iris_gui.py, iris_local.py
 
-**Problem**: No way to view or change voice style in the GUI. User can't tell what style is active or switch between Normal/Formal/Concise/Immersive/Learning modes.
+**Problem**: No way to view or change voice style in the GUI.
 
-**Requirements**:
-- [ ] Display current voice style in config panel
-- [ ] Dropdown or radio buttons to switch styles
-- [ ] Persist selection (localStorage equivalent for native client)
-- [ ] Apply style to system prompt dynamically
+**Solution Implemented**:
+- Created `src/voice_styles.py` - Python port of TypeScript voice styles
+- Added "Style" combo box in GUI config panel
+- Five styles: Normal, Formal, Concise, Immersive, Learning
+- Style applied to system prompt via `get_system_prompt(model, voice_style)`
 
-**Reference**: Web app has this in `packages/web-app/src/components/Chat.tsx`
+**Files**:
+- `src/voice_styles.py`: VoiceStyle dataclass, VOICE_STYLES registry, helpers
+- `iris_gui.py`: Added combo box, callback `_on_voice_style_change`
+- `iris_local.py`: Added `voice_style` to IrisConfig, updated get_system_prompt
+
+**Note**: Persistence not yet implemented (session-only). Would need config file at `~/.config/iris/` for cross-session persistence.
 
 ### GUI-002: Show Acknowledgments in Conversation Transcript
 **Severity**: 🟡 Medium | **Created**: 2025-12-06

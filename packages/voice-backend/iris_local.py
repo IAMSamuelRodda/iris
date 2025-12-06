@@ -54,6 +54,15 @@ import requests
 # Tools module
 from src.tools import TOOLS, execute_tool, supports_tools, get_session_todos
 
+# Voice styles module
+from src.voice_styles import (
+    VoiceStyleId,
+    get_voice_style_prompt,
+    get_voice_style_names,
+    get_style_id_from_name,
+    VOICE_STYLE_OPTIONS,
+)
+
 # Setup cuDNN before other imports
 def _setup_cudnn():
     try:
@@ -169,19 +178,25 @@ STYLE (3B model guidance):
 }
 
 
-def get_system_prompt(model_name: str, log: bool = False) -> str:
+def get_system_prompt(
+    model_name: str,
+    voice_style: VoiceStyleId = "normal",
+    log: bool = False
+) -> str:
     """
-    Build system prompt from base + family + specific model additions.
+    Build system prompt from base + family + specific model + voice style.
 
     Hierarchy (all applied if matched):
     1. SYSTEM_PROMPT_BASE - always included
     2. MODEL_FAMILY_PROMPTS - matched by prefix (e.g., "qwen" → qwen2.5:7b)
     3. MODEL_SPECIFIC_PROMPTS - matched by exact name (e.g., "qwen2.5:7b")
+    4. VOICE_STYLE_PROMPT - conversation style modifier
 
     Smaller models get more guidance; larger models rely on their capabilities.
 
     Args:
         model_name: Ollama model name (e.g., "qwen2.5:7b", "mistral:7b")
+        voice_style: Voice style ID ("normal", "formal", "concise", etc.)
         log: If True, log which prompts were applied
 
     Returns:
@@ -204,16 +219,19 @@ def get_system_prompt(model_name: str, log: bool = False) -> str:
         prompt += MODEL_SPECIFIC_PROMPTS[model_lower]
         matched_specific = model_lower
 
+    # Layer 4: Add voice style prompt modifier
+    voice_style_prompt = get_voice_style_prompt(voice_style)
+    if voice_style_prompt:
+        prompt += voice_style_prompt
+
     if log:
         parts = []
         if matched_family:
             parts.append(f"{matched_family.upper()} family")
         if matched_specific:
             parts.append(f"{matched_specific} specific")
-        if parts:
-            logger.info(f"[LLM] System prompt: base + {' + '.join(parts)}")
-        else:
-            logger.info(f"[LLM] System prompt: base only (no rules for {model_name})")
+        parts.append(f"{voice_style} style")
+        logger.info(f"[LLM] System prompt: base + {' + '.join(parts)}")
 
     return prompt
 
@@ -238,6 +256,7 @@ class IrisConfig:
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
     max_tokens: int = 150
     enable_tools: bool = True  # Enable Ollama tool calling
+    voice_style: VoiceStyleId = "normal"  # Conversation style
 
     # STT
     stt_model: str = os.getenv("STT_MODEL_SIZE", "base")
@@ -761,7 +780,7 @@ class IrisLocal:
         payload = {
             "model": self.config.ollama_model,
             "prompt": prompt,
-            "system": get_system_prompt(self.config.ollama_model),
+            "system": get_system_prompt(self.config.ollama_model, self.config.voice_style),
             "stream": True,
             "options": {
                 "num_predict": self.config.max_tokens,
@@ -822,24 +841,11 @@ class IrisLocal:
             # For streaming, caller should use _call_llm_stream directly
             return "".join(self._call_llm_stream(prompt))
 
-        # Build messages with history (uses model-specific system prompt)
-        messages = [{"role": "system", "content": get_system_prompt(self.config.ollama_model, log=True)}]
+        # Build messages with history (uses model-specific system prompt + voice style)
+        messages = [{"role": "system", "content": get_system_prompt(self.config.ollama_model, self.config.voice_style, log=True)}]
 
-        # Add interruption context if present - persist in conversation history
-        if self._last_interruption:
-            ie = self._last_interruption
-            interruption_note = (
-                f"[INTERRUPTION: You were interrupted. "
-                f"You intended to say: \"{ie.intended_response}\" "
-                f"but user only heard: \"{ie.spoken_up_to}\"]"
-            )
-            # Add to conversation history so it persists for future reference
-            self._conversation_history.append({
-                "role": "assistant",
-                "content": interruption_note
-            })
-            logger.info(f"[LLM] Added interruption context to history")
-            self._last_interruption = None
+        # Note: Interruption context is handled in process_voice() before this call
+        # The context is already added to _conversation_history with full user interruption
 
         # Add conversation history
         messages.extend(self._conversation_history)
@@ -1074,27 +1080,32 @@ class IrisLocal:
         """
         total_start = time.perf_counter()
 
-        # Check for previous interruption context - add to conversation history
-        if self._last_interruption:
-            ie = self._last_interruption
-            interruption_note = (
-                f"[INTERRUPTION: You were interrupted. "
-                f"You intended to say: \"{ie.intended_response}\" "
-                f"but user only heard: \"{ie.spoken_up_to}\"]"
-            )
-            # Add to conversation history so it persists for future reference
-            self._conversation_history.append({
-                "role": "assistant",
-                "content": interruption_note
-            })
-            logger.info(f"[LLM] Added interruption context to history")
-            self._last_interruption = None
-
-        # STT
+        # STT first - we need to know what the user said
         text = self.transcribe(audio)
         if not text.strip():
             logger.info("[Pipeline] No speech detected")
             return ""
+
+        # Check for previous interruption context - add to conversation history
+        # Now includes what user said to interrupt
+        if self._last_interruption:
+            ie = self._last_interruption
+            ie.user_interruption = text  # Update with what user said
+
+            # Format follows ARCH-006 design
+            interruption_note = (
+                f"[INTERRUPTION: Your previous response was interrupted. "
+                f"You intended to say: \"{ie.intended_response}\" "
+                f"but user only heard up to: \"{ie.spoken_up_to}\" "
+                f"Their interruption: \"{ie.user_interruption}\"]"
+            )
+            # Add to conversation history so LLM understands context
+            self._conversation_history.append({
+                "role": "assistant",
+                "content": interruption_note
+            })
+            logger.info(f"[Interruption] Context added - user said: \"{text}\"")
+            self._last_interruption = None
 
         prompt = text
 

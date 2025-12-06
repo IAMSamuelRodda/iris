@@ -44,6 +44,13 @@ from typing import Callable
 
 import numpy as np
 
+# Voice styles module
+from src.voice_styles import (
+    VoiceStyleId,
+    get_voice_style_names,
+    get_style_id_from_name,
+)
+
 # Setup cuDNN before imports
 def _setup_cudnn():
     try:
@@ -90,6 +97,7 @@ class GUIState:
     # Config
     model: str = "qwen2.5:7b"
     voice: str = "af_heart"
+    voice_style: VoiceStyleId = "normal"
     max_tokens: int = 150
     input_device: int | None = None
     output_device: int | None = None
@@ -102,9 +110,10 @@ class GUIState:
 class IrisGUI:
     """DearPyGui-based GUI for IRIS Local."""
 
-    # Available models and voices
+    # Available models, voices, and styles
     MODELS = ["qwen2.5:7b", "mistral:7b", "llama3.1:8b", "phi3:mini"]
     VOICES = ["af_heart", "af_bella", "af_nicole", "am_adam", "am_michael"]
+    VOICE_STYLES = get_voice_style_names()  # ["Normal - Balanced", "Formal - Professional", ...]
 
     @staticmethod
     def get_audio_devices():
@@ -363,6 +372,18 @@ class IrisGUI:
 
             dpg.add_spacer(width=20)
 
+            # Voice style selector
+            dpg.add_text("Style", color=self.COLOR_TEXT_DIM)
+            dpg.add_combo(
+                self.VOICE_STYLES,
+                default_value=self.VOICE_STYLES[0],  # Normal - Balanced
+                width=150,
+                tag="voice_style_combo",
+                callback=self._on_voice_style_change
+            )
+
+            dpg.add_spacer(width=20)
+
             # Max tokens
             dpg.add_text("Max Tokens", color=self.COLOR_TEXT_DIM)
             dpg.add_input_int(
@@ -499,6 +520,16 @@ class IrisGUI:
                 self.iris._tts.current_voice = app_data
         self._update_status(f"Voice: {app_data}")
         logger.info(f"[TTS] Voice changed to: {app_data}")
+
+    def _on_voice_style_change(self, sender, app_data):
+        """Handle voice style selection change."""
+        # Convert display name to style ID
+        style_id = get_style_id_from_name(app_data)
+        self.state.voice_style = style_id
+        if self.iris:
+            self.iris.config.voice_style = style_id
+        self._update_status(f"Style: {app_data}")
+        logger.info(f"[LLM] Voice style changed to: {style_id}")
 
     def _on_max_tokens_change(self, sender, app_data):
         """Handle max tokens change."""
