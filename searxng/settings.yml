@@ -1,0 +1,16 @@
+# SearXNG settings for IRIS
+# Enable JSON API for programmatic access
+
+use_default_settings: true
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "iris_searxng_secret_key_20251206"
+  limiter: false
+  image_proxy: false

@@ -35,7 +35,7 @@ services:
     environment:
       - SEARXNG_BASE_URL=http://localhost:8888
     volumes:
-      - searxng-data:/etc/searxng
+      - ./searxng/settings.yml:/etc/searxng/settings.yml
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
@@ -144,8 +144,6 @@ services:
 volumes:
   voice-models:
     name: iris-voice-models
-  searxng-data:
-    name: iris-searxng-data
 
 networks:
   iris-network:
