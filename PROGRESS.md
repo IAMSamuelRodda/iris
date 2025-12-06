@@ -26,7 +26,7 @@
 
 ## 📌 Epic 0: Native Client - DearPyGui Voice Interface (PRIMARY)
 
-**Status**: 🟢 Core Complete, 🟡 Tools In Progress
+**Status**: 🟢 Complete (14 tools including memory)
 **Priority**: PRIMARY - This is the main development track
 
 > **Implementation**: Python DearPyGui desktop application with local Ollama LLM
@@ -82,7 +82,7 @@
 | task_0_6_2 | Add interruption context display panel | 1.5 | 0.25d | 🟢 |
 | task_0_6_3 | Fix audio overlap race condition with mutex | 2.0 | 0.25d | 🟢 |
 
-### Feature 0.7: Local Tool Integration (3-5 days) 🟡
+### Feature 0.7: Local Tool Integration (3-5 days) 🟢
 | ID | Task | Complexity | Est. | Status |
 |----|------|------------|------|--------|
 | task_0_7_1 | Implement Ollama tool calling wrapper | 2.5 | 1d | 🟢 |
@@ -90,13 +90,18 @@
 | task_0_7_3 | Integrate tool results into conversation flow | 2.2 | 0.5d | 🟢 |
 | task_0_7_4 | Time/date tool (current time, timezone support) | 1.5 | 0.5d | 🟢 |
 | task_0_7_5 | Calculator tool (basic math operations) | 1.5 | 0.5d | 🟢 |
-| task_0_7_6 | Timer/reminder tool (local notifications) | 2.0 | 1d | 🔴 |
+| task_0_7_6 | Session todo tools (like Claude Code TodoWrite) | 2.0 | 0.5d | 🟢 |
 | task_0_7_7 | Web search tool (Brave Search API) | 2.3 | 1d | 🟢 |
+| task_0_7_8 | Todoist reminder tools (create, list, complete) | 2.5 | 1d | 🟢 |
 
-> **Note**: Local tools work offline without external API dependencies (except web search)
+> **14 Tools Complete**:
+> - Session: `todo_add`, `todo_complete`, `todo_list` (track agent's multi-step work)
+> - Utility: `get_current_time`, `calculate`, `web_search`
+> - Todoist: `todoist_create_task`, `todoist_list_tasks`, `todoist_complete_task`
+> - Memory: `memory_remember`, `memory_recall`, `memory_forget`, `memory_relate`, `memory_summary`
 > **Ollama models with tool support**: qwen2.5, llama3.1, mistral
-> **Implemented (a103d6e)**: Tool framework in `src/tools.py`, integration in `iris_local.py`
-> **Web search (ce5ee2a)**: Brave Search API, requires `BRAVE_API_KEY` env var
+> **Config**: API keys in `~/.config/iris/secrets.env` (BRAVE_API_KEY, TODOIST_API_KEY)
+> **Memory DB**: `~/.config/iris/memory.db` (SQLite knowledge graph)
 
 ---
 
@@ -501,15 +506,15 @@
 
 | Epic | Features | Status | Notes |
 |------|----------|--------|-------|
-| **9. Subagent Delegation** | 5 | 🔍 Spike | After tools (ARCH-008) |
+| **9. Subagent Delegation** | 5 | 🔍 Spike | After memory (ARCH-008) |
 | **10. Context Optimization** | 5 | 🔍 Spike | After delegation (ARCH-009) |
-| **11. Native Memory** | 5 | 🔍 Spike | After tools - Python port |
+| **11. Native Memory** | 5 | 🟢 Complete | Python port done (2025-12-06) |
 
 > **Last Updated**: 2025-12-06
 > **Focus**: Native Primary, Web Secondary
 > **Native MVP**: DearPyGui desktop app with local Ollama + faster-whisper + Kokoro
 > **Voice latency**: ~700ms round-trip (target <500ms)
-> **Current Work**: Tool integration 6/7 complete; remaining: timer/reminder tool
+> **Current Work**: Epic 0 + 11 complete (14 tools); next: Subagent Delegation (Epic 9)
 
 ---
 
@@ -568,22 +573,23 @@
 > **Goal**: Squeeze more context from models for natural conversations
 > **Approach**: Summarize older messages, compress tool outputs, preserve key facts
 
-### 🔮 Epic 11: Native Memory Integration (FUTURE)
+### 🟢 Epic 11: Native Memory Integration (COMPLETE)
 
-**Status**: 🔍 Needs Spike | **Prerequisite**: Feature 0.7 complete
-**Reference**: `packages/memory-service/` (TypeScript), `pip-by-arc-forge` (Anthropic MCP Memory pattern)
+**Status**: 🟢 Complete | **Completed**: 2025-12-06
+**Files**: `src/memory.py` (schema + managers), `src/tools.py` (5 memory tools)
 
-| Feature | Description | Complexity |
-|---------|-------------|------------|
-| 11.1 | Python memory client (SQLite knowledge graph) | 2.5 |
-| 11.2 | Ollama memory tools (create/search entities) | 2.3 |
-| 11.3 | Conversation persistence (native client) | 2.0 |
-| 11.4 | User edit tracking ("remember that...") | 2.2 |
-| 11.5 | Memory summary generation via LLM | 2.5 |
+| Feature | Description | Complexity | Status |
+|---------|-------------|------------|--------|
+| 11.1 | Python memory client (SQLite knowledge graph) | 2.5 | 🟢 |
+| 11.2 | Ollama memory tools (create/search entities) | 2.3 | 🟢 |
+| 11.3 | Conversation persistence (native client) | 2.0 | 🟢 |
+| 11.4 | User edit tracking ("remember that...") | 2.2 | 🟢 |
+| 11.5 | Memory summary generation via LLM | 2.5 | 🟢 |
 
-> **Current State**: memory-service is TypeScript for web backend; native client has in-memory only
+> **Implementation**: Full Python port of TypeScript memory-service
+> **Database**: `~/.config/iris/memory.db` (SQLite knowledge graph)
+> **Tools**: `memory_remember`, `memory_recall`, `memory_forget`, `memory_relate`, `memory_summary`
 > **Pattern**: Anthropic MCP Memory Server (entities + observations + relations)
-> **Integration**: After tools work, memory becomes usable via tool calling
 
 ---
 

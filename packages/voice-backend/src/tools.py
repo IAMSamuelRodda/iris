@@ -17,7 +17,7 @@ Usage:
     result = execute_tool(tool_name, arguments)
 
 Tool Types:
-    - Native: todo_*, get_current_time, calculate, web_search
+    - Native: todo_*, get_current_time, calculate, web_search, memory_*
     - MCP: mcp_* (via lazy-mcp proxy to external services)
 """
 
@@ -462,6 +462,105 @@ TOOLS = [
             },
         },
     },
+    # --- Memory Tools (Knowledge Graph) ---
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_remember",
+            "description": "Remember something about the user or important information. Use when user says 'remember that...', 'keep in mind...', or tells you important preferences/facts.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entity_name": {
+                        "type": "string",
+                        "description": "What/who this fact is about (e.g., 'User', 'The Armada', 'Calico fleet')",
+                    },
+                    "entity_type": {
+                        "type": "string",
+                        "enum": ["person", "organization", "fleet", "ship", "location", "concept", "event"],
+                        "description": "Type of entity (default: concept)",
+                    },
+                    "facts": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Facts to remember about this entity (e.g., ['prefers morning notifications', 'owns 3 ships'])",
+                    }
+                },
+                "required": ["entity_name", "facts"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_recall",
+            "description": "Search memory for what you know about something. Use when you need context, user asks 'what do you know about X?', or need to recall preferences.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to search for in memory (e.g., 'fleet preferences', 'mining routes', 'user')",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_forget",
+            "description": "Forget something from memory. Use when user says 'forget that...', 'remove...', or wants to delete stored information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entity_name": {
+                        "type": "string",
+                        "description": "Name of the entity to forget (deletes entity and all its facts)",
+                    }
+                },
+                "required": ["entity_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_relate",
+            "description": "Create a relationship between two things in memory. Use to link concepts (e.g., 'Commander Sam' commands 'The Armada').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from_entity": {
+                        "type": "string",
+                        "description": "Source entity name (e.g., 'Commander Sam')",
+                    },
+                    "relation": {
+                        "type": "string",
+                        "description": "Relationship type in active voice (e.g., 'commands', 'owns', 'mines_at')",
+                    },
+                    "to_entity": {
+                        "type": "string",
+                        "description": "Target entity name (e.g., 'The Armada')",
+                    }
+                },
+                "required": ["from_entity", "relation", "to_entity"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_summary",
+            "description": "Get a summary of everything remembered about the user. Use when user asks 'what do you remember?', 'what do you know about me?'.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]
 
 # Models that support tool calling (prefix match)
@@ -750,6 +849,150 @@ def _todoist_complete_task(task_id: str = None, task_content: str = None) -> str
 
 
 # ==============================================================================
+# Memory API (Knowledge Graph)
+# ==============================================================================
+
+# Lazy-load memory module to avoid import errors during warmup
+_memory_manager = None
+
+
+def _get_memory_manager():
+    """Get or create the memory manager (lazy initialization)."""
+    global _memory_manager
+    if _memory_manager is None:
+        try:
+            from src.memory import get_memory_manager
+            _memory_manager = get_memory_manager(user_id="default")
+            logger.info("[Memory] Initialized knowledge graph")
+        except Exception as e:
+            logger.error(f"[Memory] Failed to initialize: {e}")
+            raise
+    return _memory_manager
+
+
+def _memory_remember(entity_name: str, facts: list[str], entity_type: str = "concept") -> str:
+    """Remember facts about an entity."""
+    try:
+        mm = _get_memory_manager()
+
+        # Create or update entity with observations
+        result = mm.create_entities([{
+            "name": entity_name,
+            "entityType": entity_type,
+            "observations": facts,
+        }], is_user_edit=True)
+
+        if result:
+            entity = result[0]
+            fact_count = len(entity.observations)
+            if fact_count > 0:
+                return f"Remembered {fact_count} fact(s) about {entity_name}."
+            else:
+                return f"Entity '{entity_name}' already exists. Added new facts."
+        else:
+            return f"Could not remember information about {entity_name}."
+
+    except Exception as e:
+        logger.error(f"[Memory] Remember error: {e}")
+        return f"Memory error: {str(e)}"
+
+
+def _memory_recall(query: str) -> str:
+    """Search memory for information."""
+    try:
+        mm = _get_memory_manager()
+
+        # Search for matching entities
+        results = mm.search_nodes(query, limit=5)
+
+        if not results:
+            return f"I don't have any memories matching '{query}'."
+
+        lines = [f"Here's what I remember about '{query}':"]
+        for entity in results:
+            lines.append(f"\n**{entity.name}** ({entity.entity_type}):")
+            for obs in entity.observations:
+                lines.append(f"  - {obs}")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"[Memory] Recall error: {e}")
+        return f"Memory error: {str(e)}"
+
+
+def _memory_forget(entity_name: str) -> str:
+    """Forget an entity and all its facts."""
+    try:
+        mm = _get_memory_manager()
+
+        deleted = mm.delete_entities([entity_name])
+
+        if deleted:
+            return f"Forgot everything about {entity_name}."
+        else:
+            return f"I don't have any memories of '{entity_name}'."
+
+    except Exception as e:
+        logger.error(f"[Memory] Forget error: {e}")
+        return f"Memory error: {str(e)}"
+
+
+def _memory_relate(from_entity: str, relation: str, to_entity: str) -> str:
+    """Create a relationship between two entities."""
+    try:
+        mm = _get_memory_manager()
+
+        # Create relation
+        created = mm.create_relations([{
+            "from": from_entity,
+            "to": to_entity,
+            "relationType": relation,
+        }])
+
+        if created:
+            return f"Noted: {from_entity} {relation} {to_entity}."
+        else:
+            return f"Relationship already exists or could not be created."
+
+    except Exception as e:
+        logger.error(f"[Memory] Relate error: {e}")
+        return f"Memory error: {str(e)}"
+
+
+def _memory_summary() -> str:
+    """Get a summary of the user's memory graph."""
+    try:
+        mm = _get_memory_manager()
+
+        # Get the full graph
+        graph = mm.read_graph()
+
+        if not graph.entities:
+            return "I don't have any stored memories yet."
+
+        # Build summary
+        entity_count = len(graph.entities)
+        relation_count = len(graph.relations)
+        total_facts = sum(len(e.observations) for e in graph.entities)
+
+        lines = [f"I remember {entity_count} thing(s) with {total_facts} fact(s) and {relation_count} relationship(s):\n"]
+
+        for entity in graph.entities[:10]:  # Limit for voice output
+            fact_preview = entity.observations[0][:50] + "..." if entity.observations else "no details"
+            lines.append(f"- **{entity.name}**: {fact_preview}")
+
+        if len(graph.entities) > 10:
+            lines.append(f"\n...and {len(graph.entities) - 10} more.")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"[Memory] Summary error: {e}")
+        return f"Memory error: {str(e)}"
+
+
+# ==============================================================================
 # Tool Execution
 # ==============================================================================
 
@@ -767,6 +1010,12 @@ TOOL_FUNCTIONS = {
     "todoist_create_task": _todoist_create_task,
     "todoist_list_tasks": _todoist_list_tasks,
     "todoist_complete_task": _todoist_complete_task,
+    # Memory (knowledge graph)
+    "memory_remember": _memory_remember,
+    "memory_recall": _memory_recall,
+    "memory_forget": _memory_forget,
+    "memory_relate": _memory_relate,
+    "memory_summary": _memory_summary,
 }
 
 
