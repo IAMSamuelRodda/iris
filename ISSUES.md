@@ -117,6 +117,43 @@ interface InterruptionEvent {
 
 ---
 
+### BUG-001: PTT/VAD Mode Toggle UX Issues
+**Severity**: 🔴 Critical | **Created**: 2025-12-06
+**Component**: iris_local.py (DearPyGui)
+
+**Problems Discovered**:
+1. **PTT and VAD can both appear active** - checkbox shows VAD ticked while PTT button is active
+2. **VAD mode switch during TTS doesn't capture audio** - switching to VAD mid-response fails to detect speech
+3. **Barge-in doesn't work after mode switch** - VAD enabled but no speech detection occurs
+4. **App becomes unresponsive** - had to use PTT to recover after failed VAD switch
+
+**Expected Behavior**:
+- PTT and VAD should be **mutually exclusive toggle** (radio buttons, not checkbox + button)
+- Mode switch should be graceful even during TTS playback
+- PTT button press should **immediately trigger interrupt** (not just start recording)
+- Current mode should be visually unambiguous
+
+**Root Cause Analysis**:
+- VAD thread lock may be blocking during TTS (thread-safety fix too aggressive?)
+- Mode state not properly synchronized between GUI and audio capture
+- ffmpeg subprocess may not restart cleanly on mode switch
+
+**Reproduction**:
+1. Start in PTT mode
+2. Press PTT, ask a question
+3. While IRIS is responding, click "Always Listening" checkbox
+4. Try to speak - no detection
+5. VAD shows active but doesn't capture
+
+**Fix Approach**:
+- [ ] Make PTT/VAD mutually exclusive UI (radio group)
+- [ ] Stop TTS playback on mode switch
+- [ ] Ensure clean ffmpeg process restart on mode switch
+- [ ] PTT button press = immediate interrupt signal
+- [ ] Review thread lock scope (may be too broad)
+
+---
+
 ### ARCH-007: Streaming Architecture Overhaul
 **Severity**: 🟡 High | **Created**: 2025-12-05
 **Component**: Full stack

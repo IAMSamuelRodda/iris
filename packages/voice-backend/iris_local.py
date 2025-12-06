@@ -263,7 +263,13 @@ class SileroVAD:
 
     Detects speech in audio stream with ~50ms latency.
     Does NOT use RealtimeSTT - direct model inference.
+
+    Thread-safe: Uses class-level lock to prevent concurrent model access
+    which can cause heap corruption when multiple threads use the model.
     """
+
+    # Class-level lock shared by all instances to prevent concurrent model access
+    _model_lock = threading.Lock()
 
     def __init__(self, threshold: float = 0.5):
         self.threshold = threshold
@@ -272,22 +278,23 @@ class SileroVAD:
 
     @property
     def model(self):
-        """Lazy-load VAD model."""
-        if self._model is None:
-            import torch
-            logger.info("[VAD] Loading Silero VAD model...")
-            self._model, self._utils = torch.hub.load(
-                repo_or_dir='snakers4/silero-vad',
-                model='silero_vad',
-                force_reload=False,
-                onnx=False,  # Use PyTorch for CUDA support
-            )
-            logger.info("[VAD] Model loaded")
-        return self._model
+        """Lazy-load VAD model (thread-safe)."""
+        with SileroVAD._model_lock:
+            if self._model is None:
+                import torch
+                logger.info("[VAD] Loading Silero VAD model...")
+                self._model, self._utils = torch.hub.load(
+                    repo_or_dir='snakers4/silero-vad',
+                    model='silero_vad',
+                    force_reload=False,
+                    onnx=False,  # Use PyTorch for CUDA support
+                )
+                logger.info("[VAD] Model loaded")
+            return self._model
 
     def is_speech(self, audio_chunk: np.ndarray, sample_rate: int = 16000) -> tuple[bool, float]:
         """
-        Check if audio chunk contains speech.
+        Check if audio chunk contains speech (thread-safe).
 
         Args:
             audio_chunk: Audio samples (float32, -1 to 1)
@@ -305,8 +312,9 @@ class SileroVAD:
         # Silero expects 512 samples at 16kHz (32ms chunks)
         tensor = torch.from_numpy(audio_chunk)
 
-        # Get speech probability
-        speech_prob = self.model(tensor, sample_rate).item()
+        # Thread-safe model inference
+        with SileroVAD._model_lock:
+            speech_prob = self.model(tensor, sample_rate).item()
 
         return speech_prob > self.threshold, speech_prob
 
